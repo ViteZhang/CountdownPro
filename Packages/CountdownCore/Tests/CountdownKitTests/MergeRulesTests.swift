@@ -1,0 +1,123 @@
+import XCTest
+@testable import CountdownKit
+
+/// 需求文档 5.14.4。合并逻辑出错会让用户的累计天数变少 —— 那是这个产品最不能出的错。
+final class MergeRulesTests: XCTestCase {
+
+    let cal = DayCalendar.fixed()
+
+    private func checkIn(_ y: Int, _ m: Int, _ d: Int, backfill: Bool = false, created: Date? = nil)
+        -> ExportSnapshot.CheckInDTO {
+        let date = cal.day(y, m, d)
+        return .init(date: date, examID: "E1", isBackfill: backfill, createdAt: created ?? date)
+    }
+
+    /// 打卡取并集 —— 不同设备的打卡都算数。
+    func testCheckInsAreUnioned() {
+        let local = [checkIn(2026, 12, 1), checkIn(2026, 12, 2)]
+        let remote = [checkIn(2026, 12, 2), checkIn(2026, 12, 3)]
+        let merged = MergeRules.mergeCheckIns(local: local, remote: remote)
+        XCTAssertEqual(merged.count, 3)
+        XCTAssertEqual(merged.map { cal.dayOfMonth(of: $0.date) }, [1, 2, 3])
+    }
+
+    /// D-03「累计只增不减」在同步层的兑现：合并结果永远 ≥ 任一端。
+    func testMergeNeverShrinksTotal() {
+        let local = (1...20).map { checkIn(2026, 12, $0) }
+        let remote = (10...31).map { checkIn(2026, 12, $0) }
+        let merged = MergeRules.mergeCheckIns(local: local, remote: remote)
+        XCTAssertGreaterThanOrEqual(merged.count, local.count)
+        XCTAssertGreaterThanOrEqual(merged.count, remote.count)
+        XCTAssertEqual(merged.count, 31)
+    }
+
+    /// 同一天一端补签、一端正常打卡 → 不算补签，且保留更早的操作时间。
+    func testCheckInConflictPrefersRealCheckInAndEarliestCreation() {
+        let early = cal.day(2026, 12, 1)
+        let late = cal.day(2026, 12, 5)
+        let local = [checkIn(2026, 12, 1, backfill: true, created: late)]
+        let remote = [checkIn(2026, 12, 1, backfill: false, created: early)]
+        let merged = MergeRules.mergeCheckIns(local: local, remote: remote)
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertFalse(merged[0].isBackfill)
+        XCTAssertEqual(merged[0].createdAt, early)
+    }
+
+    /// 冲突以最后写入时间较晚者为准。
+    func testNoteConflictPrefersLatestUpdate() {
+        let base = cal.day(2026, 12, 1)
+        let older = ExportSnapshot.NoteDTO(id: "N1", date: base, content: "旧", createdAt: base, updatedAt: base)
+        let newer = ExportSnapshot.NoteDTO(
+            id: "N1", date: base, content: "新", createdAt: base, updatedAt: cal.day(2026, 12, 9)
+        )
+        XCTAssertEqual(MergeRules.mergeNotes(local: [older], remote: [newer]).first?.content, "新")
+        XCTAssertEqual(MergeRules.mergeNotes(local: [newer], remote: [older]).first?.content, "新")
+    }
+
+    private func exam(_ id: String, primary: Bool, updated: Date) -> ExportSnapshot.ExamDTO {
+        .init(id: id, type: .gaokao, title: "高考",
+              startDate: cal.day(2024, 9, 1), targetDate: cal.day(2027, 6, 7),
+              province: nil, isPrimary: primary, createdAt: cal.day(2026, 1, 1), updatedAt: updated)
+    }
+
+    /// 两端各自设了不同的主考试 → 合并后必须**恰好一个** isPrimary，否则首页不知道展示哪个。
+    func testExactlyOnePrimaryExamAfterMerge() {
+        let local = [exam("A", primary: true, updated: cal.day(2026, 12, 1)),
+                     exam("B", primary: false, updated: cal.day(2026, 12, 1))]
+        let remote = [exam("A", primary: false, updated: cal.day(2026, 12, 2)),
+                      exam("B", primary: true, updated: cal.day(2026, 12, 5))]
+        let merged = MergeRules.mergeExams(local: local, remote: remote)
+        XCTAssertEqual(merged.filter(\.isPrimary).count, 1)
+        XCTAssertEqual(merged.first(where: \.isPrimary)?.id, "B")
+    }
+
+    func testMergeExamsWithNoPrimaryStillProducesOne() {
+        let merged = MergeRules.mergeExams(
+            local: [exam("A", primary: false, updated: cal.day(2026, 12, 1))],
+            remote: []
+        )
+        XCTAssertEqual(merged.filter(\.isPrimary).count, 1)
+    }
+
+    private func letter(_ id: String, opened: Bool, openedAt: Date? = nil, content: String? = nil)
+        -> ExportSnapshot.LetterDTO {
+        .init(id: id, writtenAt: cal.day(2026, 8, 24), openAt: cal.day(2026, 12, 2),
+              openTrigger: .d100, isOpened: opened, openedAt: openedAt,
+              content: content, sealedContentBase64: opened ? nil : "c2VhbGVk")
+    }
+
+    /// 信件不可修改，唯一会变的是「是否已开启」—— 任一端开启过即为已开启。
+    func testLetterOpenedOnEitherSideWins() {
+        let sealed = letter("L1", opened: false)
+        let opened = letter("L1", opened: true, openedAt: cal.day(2026, 12, 2), content: "正文")
+        for merged in [MergeRules.mergeLetters(local: [sealed], remote: [opened]),
+                       MergeRules.mergeLetters(local: [opened], remote: [sealed])] {
+            XCTAssertEqual(merged.count, 1)
+            XCTAssertTrue(merged[0].isOpened)
+            XCTAssertEqual(merged[0].content, "正文")
+        }
+    }
+
+    /// 合并**不得**把未开启的信提前变成明文 —— 导出与同步都不能成为偷看的旁路（D-08）。
+    func testSealedLetterStaysSealedThroughMerge() {
+        let merged = MergeRules.mergeLetters(local: [letter("L1", opened: false)],
+                                             remote: [letter("L1", opened: false)])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertFalse(merged[0].isOpened)
+        XCTAssertNil(merged[0].content)
+        XCTAssertNotNil(merged[0].sealedContentBase64)
+    }
+
+    func testMergeIsCommutativeInCount() {
+        let l = ExportSnapshot(exportedAt: cal.day(2026, 12, 1),
+                               exams: [exam("A", primary: true, updated: cal.day(2026, 12, 1))],
+                               checkIns: [checkIn(2026, 12, 1)], notes: [], letters: [])
+        let r = ExportSnapshot(exportedAt: cal.day(2026, 12, 2),
+                               exams: [exam("A", primary: true, updated: cal.day(2026, 12, 2))],
+                               checkIns: [checkIn(2026, 12, 2)], notes: [], letters: [])
+        let ab = MergeRules.merge(local: l, remote: r, now: cal.day(2026, 12, 3))
+        let ba = MergeRules.merge(local: r, remote: l, now: cal.day(2026, 12, 3))
+        XCTAssertEqual(ab.checkIns, ba.checkIns)
+        XCTAssertEqual(ab.exams.count, ba.exams.count)
+    }
+}

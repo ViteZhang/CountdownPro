@@ -1,0 +1,114 @@
+# 备考倒计时 · V1
+
+SwiftUI + SwiftData，iOS 原生。小组件必须原生实现，所以不走跨平台方案。
+
+## 这份文件的作用
+
+不是描述产品长什么样（那是需求文档和原型的事），而是记录**为什么长成这样**。
+
+交接时最容易丢的就是"为什么"。一旦丢了，后续迭代会把这个产品一步步改回一个普通倒计时
+——每一步看起来都很合理。
+
+## 目录结构
+
+```
+Packages/CountdownCore/          本地 SPM 包，App 与 Widget 共用
+  Sources/
+    CountdownKit/                纯 Foundation。可在任意平台跑测试
+      Domain/                    ExamType / GrowthStage / Milestone / AppFlagKey / LetterVault
+      DateEngine/                DayCalendar / Countdown / DefaultDates
+      Format/                    CensusFormatter / DateDisplay / PhoneMask
+      Strings/                   全部面向用户的文案
+      Sync/                      ExportSnapshot / MergeRules
+    DesignTokens/                颜色、字号字重、圆角间距、动效时长
+    CountdownStore/              SwiftData 模型 + App Group 配置 + Keychain 加密
+  Tests/                         94 个测试，`swift test`
+```
+
+## 硬约束（改动前请先读完对应的决策条目）
+
+### 本地优先
+所有数据先写本地，账号只是同步凭证，不是使用前提。未登录状态下全部功能可用，包括离线。
+唯一需要网络的是同考人数（以及用户主动进入的账号流程）。
+
+> 注：需求文档第 6 章写「网络请求：仅一个」，那一章写于加入 5.14 账号章节之前。
+> 实现口径是：**未登录时确实只有同考人数一个请求**；登录相关请求仅在用户主动进入账号流程后发生。
+
+### 有账号但没有注册墙（D-10）
+**首次启动引导中不得出现任何登录入口。** 引导流程的代码不 import 任何 Auth 模块，物理隔离。
+登录只在价值时刻引导（写完第一封信 / 累计 7 天 / 主动导出 / 考后接力），且都可关闭，
+每个触发点一生只弹一次（`AppFlagKey.AuthPrompt`）。
+
+账号是保险箱，不是入场券。
+
+### 同步失败不得阻塞任何功能
+静默重试，不弹错误。同步层全部在后台任务里跑，失败不冒泡到 UI。
+
+### 同考人数保持匿名（D-09）
+纯计数上报，不携带设备标识、不关联 uid。低于 1 万整块隐藏。
+`CensusFormatter.display` 对「不足 1 万」和「拉不到」**返回同一个 nil**，
+让调用方无法区分，也就无从为失败单独做错误态或骨架屏。
+
+绝不允许编造、放大、或用"累计人次"冒充"今日人数"。这个产品除了信任没有别的护城河。
+
+### 不存储任何可推导的值
+累计天数、进度、成长阶段都实时计算（`CountdownEngine.countdown`）。
+导出的 JSON 同样只含事实，不含结论（有测试守着）。
+
+## 决策记录速查
+
+| | 决策 | 代码里的落点 |
+|---|---|---|
+| D-01 | 环填充=已走过，中心=剩余 | `Countdown.progress`、`DSRing.fillIsPassedRatio` |
+| D-02 | 「今天也在」不叫「打卡」 | `Strings.Home.checkIn`，有测试锁住 |
+| D-03 | 只做累计，不做连续 | 数据层**根本不提供** streak 查询；同步取并集保证只增不减 |
+| D-04 | 补签 14 天 | `CountdownEngine.backfillWindowDays` |
+| D-05 | 树只与时间有关 | `GrowthStage.stage(progress:isExamDay:)` 的签名里**没有打卡数** |
+| D-06 | 唯一彩色留给树 | `Palette`，有彩度测试守着 |
+| D-07 | 不用纯黑纯白 | `Palette.defaultDark/Light`，有对比度测试守着 |
+| D-08 | 封存的信不可查看 | `LetterVault.reveal` 是全产品唯一解密入口，第一行校验开启日 |
+| D-09 | <1 万整块隐藏 | `CensusFormatter` |
+| D-10 | 做账号不做注册墙 | 引导流程不 import Auth |
+| D-11 | 分享卡不放二维码 | 「已走过」进度条是每张卡的必填项 |
+| D-12 | 备考期零广告 | — |
+| D-13 | 不做社区/排名/成绩对比 | — |
+| D-14 | 先说"已经走过"，再说"还剩" | `Strings.Onboarding.resultLabel` |
+
+## 最容易在评审中被"优化"掉的七处
+
+每一条都合理，每一条都会让产品变成它试图区别于的那个东西。
+
+1. 加「连续打卡」——因为几乎所有同类产品都有。见 D-03。
+2. 树能浇水互动——因为"提升活跃"。见 D-05。
+3. 分享卡加二维码——因为"方便下载"。见 D-11。
+4. 加班级榜 / 好友对比——因为"社交裂变"。见 D-13。
+5. 同考人数取整放大——因为"冷启动不好看"。见 D-09。
+6. 备考期加激励视频广告——因为"提前变现"。见 D-12。
+7. 把登录提到首启第一屏——因为"提升注册率"。注册率会涨，留存会崩。见 D-10。
+
+## 文案规则
+
+所有面向用户的文字**逐字**使用资料给定的版本，不要"优化"。
+按钮是「今天也在」不是「打卡」，这是刻意的。
+
+资料没给的文案一律走 `Strings.missing(_:)`，渲染成 `⟪待补文案：xxx⟫`。
+**禁止用自拟文案填充它。** 待补清单见 `DOCS/待补文案清单.md`。
+
+心理支持资源的热线信息必须来源权威，绝不自拟。
+
+兜底校验法：把任何一句文案放进「一个刚查完分、没考好的学生正看着屏幕」的场景里读一遍。
+读着刺耳，就重写。
+
+## 视图层规则
+
+视图层**只能引用 token**，禁止字面量颜色值和 magic number 尺寸。
+视觉后续会用 Claude Design 精修，改动必须只发生在 `DesignTokens` 这一层。
+
+## 跑测试
+
+```bash
+cd Packages/CountdownCore && swift test
+```
+
+`CountdownKit` 与 `DesignTokens` 是纯 Foundation，Linux / macOS 都能跑。
+`CountdownStore` 依赖 SwiftData/CryptoKit，只在 Apple 平台编译。
