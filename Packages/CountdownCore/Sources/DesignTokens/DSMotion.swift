@@ -35,9 +35,15 @@ public enum DSMotion {
         public static let barDelay = Duration(ms: 260)
         /// 进度条填充时长
         public static let barFill = Duration(ms: 1500)
-        /// 剩余天数 / 树 / 按钮依次淡入的起始延迟
-        public static let fadeInDelay = Duration(ms: 300)
+        /// 剩余天数 / 树 / 按钮依次淡入。
+        ///
+        /// 下面是**绝对时刻**（自第 4 屏出现算起），换算自原型的
+        /// 「300ms 起加 .on」+ 各自的 CSS transition-delay（0.9s / 1.4s / 1.9s）。
+        /// 顺序不可颠倒：先「已经走过」，再「还剩」，最后才是树与按钮 —— 见 D-14。
         public static let fadeIn = Duration(ms: 600)
+        public static let restFadeAt = Duration(ms: 1200)
+        public static let treeFadeAt = Duration(ms: 1700)
+        public static let footFadeAt = Duration(ms: 2200)
         /// 总时长约 2500ms。**不可跳过 —— 全产品唯一一次允许强制观看。**
         public static let total = Duration(ms: 2500)
     }

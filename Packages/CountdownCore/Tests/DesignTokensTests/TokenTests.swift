@@ -158,12 +158,38 @@ final class MotionTokenTests: XCTestCase {
         XCTAssertEqual(DSMotion.Onboarding.total.seconds, 2.5, accuracy: 1e-9)
     }
 
-    /// 引导第 4 屏各段必须都收在总时长内。
-    func testOnboardingSequenceFitsInTotal() {
-        let barEnd = DSMotion.Onboarding.barDelay.seconds + DSMotion.Onboarding.barFill.seconds
-        let fadeEnd = DSMotion.Onboarding.fadeInDelay.seconds + DSMotion.Onboarding.fadeIn.seconds
-        XCTAssertLessThanOrEqual(barEnd, DSMotion.Onboarding.total.seconds)
-        XCTAssertLessThanOrEqual(fadeEnd, DSMotion.Onboarding.total.seconds)
-        XCTAssertLessThanOrEqual(DSMotion.Onboarding.counterRoll.seconds, DSMotion.Onboarding.total.seconds)
+    /// 引导第 4 屏的时序（ONBOARD-04）。
+    func testOnboardingSequenceTiming() {
+        let o = DSMotion.Onboarding.self
+        XCTAssertEqual(o.barDelay.seconds, 0.26, accuracy: 1e-9)
+        XCTAssertEqual(o.barFill.seconds, 1.5, accuracy: 1e-9)
+        XCTAssertLessThanOrEqual(o.counterRoll.seconds, o.total.seconds)
+        XCTAssertLessThanOrEqual(o.barDelay.seconds + o.barFill.seconds, o.total.seconds)
+    }
+
+    /// **设计决策 D-14：先说「已经走过」，再说「还剩」。顺序即立场。**
+    ///
+    /// 「已经走过」是数字滚动，从 `0ms` 就在场；「还剩」要等到 `1200ms` 才淡入。
+    /// 这条断言锁的是两者的**先后出场**关系 —— 颠倒过来，产品在用户心里就被归类为
+    /// "又一个倒计时"，全部差异化随之失效。
+    ///
+    /// 注意两者有意重叠约 200ms（滚动到 1400ms 结束，「还剩」1200ms 开始淡入）：
+    /// 完全串行会让这场 2.5 秒的演出显得一顿一顿的。重叠不违反 D-14，
+    /// 因为"谁先出现"没有变。
+    func testPassedIsRevealedBeforeRemaining() {
+        let o = DSMotion.Onboarding.self
+        XCTAssertGreaterThan(o.restFadeAt.seconds, 0, "「还剩」不得与「已走过」同时出现")
+        XCTAssertGreaterThanOrEqual(
+            o.restFadeAt.seconds, o.counterRoll.seconds * 0.8,
+            "「还剩」要等「已走过」基本滚完才出现，重叠不得超过滚动时长的 20%"
+        )
+    }
+
+    /// 树与按钮排在「还剩」之后，且全部收在总时长附近。
+    func testFadeInOrder() {
+        let o = DSMotion.Onboarding.self
+        XCTAssertLessThan(o.restFadeAt.seconds, o.treeFadeAt.seconds)
+        XCTAssertLessThan(o.treeFadeAt.seconds, o.footFadeAt.seconds)
+        XCTAssertLessThanOrEqual(o.footFadeAt.seconds, o.total.seconds)
     }
 }

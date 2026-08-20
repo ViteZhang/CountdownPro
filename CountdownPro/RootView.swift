@@ -30,8 +30,8 @@ struct RootView: View {
                         .tabItem { Label(Strings.Tab.letters, systemImage: "envelope") }
                 }
             } else {
-                // 首次启动引导（开发顺序 4）
-                Text(Strings.missing("首次启动引导（开发顺序 4）"))
+                // 首次启动引导。**这一条分支不得出现任何登录入口**（D-10）。
+                OnboardingView { _ in }
             }
         }
         .dsTheme(skin: .default, colorScheme: colorScheme)
