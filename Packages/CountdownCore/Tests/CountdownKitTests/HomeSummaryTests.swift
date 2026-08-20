@@ -174,3 +174,52 @@ final class HomeSummaryTests: XCTestCase {
         XCTAssertEqual(build(totalCheckIns: 32, previous: 28).newlyUnlockedSkinCheckInDays, 30)
     }
 }
+
+final class CalendarMonthTests: XCTestCase {
+
+    let cal = DayCalendar.fixed()
+    lazy var today = cal.day(2026, 12, 2)
+
+    private func month(_ y: Int, _ m: Int,
+                       checked: Set<Date> = [], backfill: Set<Date> = [], notes: Set<Date> = []) -> CalendarMonth {
+        CalendarMonth.build(year: y, month: m, today: today,
+                            checkInDates: checked, backfillDates: backfill, noteDates: notes, cal: cal)
+    }
+
+    /// 2026 年 12 月 1 日是周二 → 前面留 2 个空格。
+    func testLeadingBlanksAndLength() {
+        let m = month(2026, 12)
+        XCTAssertEqual(m.leadingBlanks, 2)
+        XCTAssertEqual(m.days.count, 31)
+        XCTAssertEqual(m.days.first?.dayOfMonth, 1)
+    }
+
+    func testFebruaryLeapYear() {
+        XCTAssertEqual(month(2024, 2).days.count, 29)
+        XCTAssertEqual(month(2025, 2).days.count, 28)
+    }
+
+    func testMarksAreIndependent() {
+        let m = month(2026, 12,
+                      checked: [cal.day(2026, 12, 1)],
+                      backfill: [cal.day(2026, 11, 30)],
+                      notes: [cal.day(2026, 12, 1)])
+        let first = m.days[0]
+        XCTAssertTrue(first.isCheckedIn)
+        XCTAssertTrue(first.hasNote)
+        XCTAssertFalse(first.isBackfill)
+        XCTAssertTrue(m.days[1].isToday)
+    }
+
+    /// 只有 14 天窗口内的格子可补签（D-04），未来的格子一律不可点。
+    func testBackfillWindowOnCalendar() {
+        let nov = month(2026, 11)
+        XCTAssertTrue(nov.days[17].canBackfill)   // 11/18，恰好第 14 天
+        XCTAssertFalse(nov.days[16].canBackfill)  // 11/17，超窗
+
+        let dec = month(2026, 12)
+        XCTAssertTrue(dec.days[0].canBackfill)    // 12/1，昨天
+        XCTAssertFalse(dec.days[1].canBackfill)   // 今天走正常打卡
+        XCTAssertFalse(dec.days[2].canBackfill)   // 未来
+    }
+}

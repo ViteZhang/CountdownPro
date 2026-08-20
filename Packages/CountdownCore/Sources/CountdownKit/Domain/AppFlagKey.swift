@@ -29,4 +29,13 @@ public enum AppFlagKey {
     }
 
     public static let sevenDaysThreshold = 7
+
+    /// 信件到期全屏提示（信件文案表 5.1）。
+    ///
+    /// **优先级高于分享卡的节点触发** —— 同一天两者都命中时先给信。
+    /// 「待会儿」当天不再弹，次日再触发，直到被拆开。
+    /// 所以记的是"最后一次推迟的日期"，而不是一个一次性的布尔值。
+    public static func letterDuePromptDeferred(letterID: String) -> String {
+        "letter_due_deferred_\(letterID)"
+    }
 }

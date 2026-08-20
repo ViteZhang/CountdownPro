@@ -18,6 +18,7 @@ import WidgetKit
 struct HomeView: View {
 
     let exam: Exam
+    var onOpenLetters: () -> Void = {}
 
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var colorScheme
@@ -47,7 +48,8 @@ struct HomeView: View {
             totalNotes: notes.count,
             hasCheckedInToday: checkIns.contains { cal.isSameDay($0.date, .now) },
             letters: letters.map {
-                LetterDigest(id: $0.id, writtenAt: $0.writtenAt, openAt: $0.openAt, isOpened: $0.isOpened)
+                LetterDigest(id: $0.id, writtenAt: $0.writtenAt, openAt: $0.openAt,
+                             isOpened: $0.isOpened, isDraft: $0.isDraft)
             },
             censusCount: nil, // 由 CensusService 注入，未登录/无网络时保持 nil（D-09）
             shownMilestoneDays: [],
@@ -143,6 +145,18 @@ struct HomeView: View {
         )
     }
 
+    /// 提示条三选一，优先级：今天到期 > 草稿未完成 > 即将开启（信件文案表第 8 节）。
+    private func hintText(_ hint: LetterHint) -> String {
+        switch hint {
+        case .dueToday:
+            return Strings.Home.letterHintDueToday
+        case .draftInProgress:
+            return Strings.Home.letterHintDraft
+        case .upcoming(let writtenDaysAgo, let inDays):
+            return Strings.Home.letterHintUpcoming(writtenDaysAgo: writtenDaysAgo, inDays: inDays)
+        }
+    }
+
     /// 考试当天中心显示「今天」（5.2 边界情况），不显示 0。
     private func centerNumber(_ c: Countdown) -> String {
         c.isExamDay ? Strings.Home.today : "\(abs(c.daysRemaining))"
@@ -236,16 +250,8 @@ struct HomeView: View {
     @ViewBuilder
     private var letterHint: some View {
         if let hint = summary.letterHint {
-            DSHintBar(
-                text: hint.isOpenableNow
-                    ? Strings.Home.letterHintToday(writtenDaysAgo: hint.writtenDaysAgo)
-                    : Strings.Home.letterHintUpcoming(
-                        writtenDaysAgo: hint.writtenDaysAgo, inDays: hint.daysUntilOpen
-                      ),
-                systemImage: "envelope",
-                palette: palette
-            ) {
-                // 跳信箱（开发顺序 5）
+            DSHintBar(text: hintText(hint), systemImage: "envelope", palette: palette) {
+                onOpenLetters()
             }
             .padding(.top, DSSpacing.cardGapWide)
         }

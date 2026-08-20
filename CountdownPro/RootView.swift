@@ -24,9 +24,9 @@ struct RootView: View {
                 TabView {
                     HomeView(exam: exam)
                         .tabItem { Label(Strings.Tab.home, systemImage: "clock") }
-                    Text(Strings.missing("记录页（开发顺序 5）"))
+                    LogView(exam: exam)
                         .tabItem { Label(Strings.Tab.log, systemImage: "calendar") }
-                    Text(Strings.missing("信箱（开发顺序 5）"))
+                    LettersView(exam: exam)
                         .tabItem { Label(Strings.Tab.letters, systemImage: "envelope") }
                 }
             } else {
