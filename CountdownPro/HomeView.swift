@@ -36,6 +36,7 @@ struct HomeView: View {
     @State private var shareInitialKind: ShareCardKind = .milestone
     @State private var readingLetter: Letter?
     @State private var resolvedPrompt = false
+    @State private var showingSettings = false
 
     private var palette: Palette {
         Theme(skin: .default, scheme: colorScheme == .dark ? .dark : .light).palette
@@ -100,6 +101,9 @@ struct HomeView: View {
         }
         .task { resolvePrompt() }
         .overlay(alignment: .top) { toastView }
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack { SettingsView() }
+        }
     }
 
     // MARK: - 顶部栏
@@ -126,7 +130,7 @@ struct HomeView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    toast = Strings.missing("设置页（开发顺序后续接入）")
+                    showingSettings = true
                 } label: {
                     Image(systemName: "gearshape")
                         .font(.system(size: 19, weight: .light))
@@ -263,6 +267,7 @@ struct HomeView: View {
         switch service.checkInToday(examID: exam.id) {
         case .recorded:
             WidgetCenter.shared.reloadAllTimelines()
+            requestNotificationPermissionIfDue()
             // 打卡后**立即**弹心里话输入（5.3 第 3 步），不是另一个流程。
             DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.stateChange.seconds) {
                 showingNoteSheet = true
@@ -272,6 +277,33 @@ struct HomeView: View {
             toast = Strings.Home.alreadyCheckedIn
         case .outsideBackfillWindow:
             break
+        }
+    }
+
+    /// 通知权限的请求时机（5.11）：**第一次打卡之后**，绝不在首次启动时。
+    ///
+    /// 引导里问权限，用户还没体会到通知有什么用，拒绝率高 ——
+    /// 而 iOS 的系统弹窗一生只出现一次，拒了就再没有第二次机会。
+    /// 刚打完卡的那一刻，用户刚做了一件和这个 App 有关的事，这时问才有依据。
+    private func requestNotificationPermissionIfDue() {
+        let flags = FlagStore(context: context, cal: cal)
+        guard NotificationPermissionPolicy.shouldRequest(
+            hasCheckedInAtLeastOnce: true,
+            alreadyAsked: flags.isSet(AppFlagKey.notificationPermissionAsked)
+        ) else { return }
+
+        flags.set(AppFlagKey.notificationPermissionAsked)
+        let inputs = letters.map {
+            LetterNotificationInput(id: $0.id, writtenAt: $0.writtenAt, openAt: $0.openAt,
+                                    trigger: $0.openTrigger, isOpened: $0.isOpened,
+                                    isDraft: $0.isDraft)
+        }
+        let targetDate = exam.targetDate
+        Task {
+            let scheduler = NotificationScheduler()
+            guard await scheduler.requestAuthorization() else { return }
+            flags.set(AppFlagKey.notificationsEnabled, value: 1)
+            await scheduler.reschedule(targetDate: targetDate, letters: inputs, cal: cal)
         }
     }
 

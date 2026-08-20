@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 import CountdownKit
 import CountdownStore
 import DesignTokens
@@ -13,6 +14,8 @@ struct AccountView: View {
 
     @State private var showingDelete = false
     @State private var toast: String?
+    @State private var exporting = false
+    @State private var exportDocument: ExportDocument?
 
     private let cal = DayCalendar.current
     private var palette: Palette {
@@ -36,9 +39,7 @@ struct AccountView: View {
                     toast = Strings.Auth.synced
                 }
                 // **即使有账号也必须提供导出**（5.13）。用户应能把自己的记录带走。
-                actionRow(Strings.Auth.rowExport, trailing: "›") {
-                    toast = Strings.Auth.exportedJSON
-                }
+                actionRow(Strings.Auth.rowExport, trailing: "›", action: export)
                 actionRow(Strings.Auth.rowSignOut, trailing: "›") {
                     toast = Strings.Auth.signedOut
                 }
@@ -65,6 +66,28 @@ struct AccountView: View {
             }
         }
         .overlay(alignment: .top) { toastView }
+        .fileExporter(
+            isPresented: $exporting,
+            document: exportDocument,
+            contentType: .json,
+            defaultFilename: SnapshotBuilder.fileName(cal: cal)
+        ) { result in
+            exportDocument = nil
+            if case .success = result { toast = Strings.Auth.exportedJSON }
+        }
+    }
+
+    /// 导出。**有账号也照样提供**（5.13）——
+    /// 「你的记录能被带走」和「你的记录在我们这儿有备份」是两件事，
+    /// 只给后者就等于把数据扣在了账号里。
+    private func export() {
+        guard let data = try? SnapshotBuilder(context: context).exportJSON() else {
+            toast = Strings.missing("数据导出失败提示")
+            return
+        }
+        exportDocument = ExportDocument(data: data)
+        exporting = true
+        FlagStore(context: context, cal: cal).set(AppFlagKey.didRequestExport)
     }
 
     private var bindTypeName: String {

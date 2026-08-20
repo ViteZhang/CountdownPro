@@ -44,6 +44,8 @@ struct MainTabView: View {
     @Query private var letters: [Letter]
     @Query private var accounts: [Account]
 
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var selectedTab = 0
     @State private var authPrompt: AuthPromptTrigger?
     @State private var showingAuthFlow = false
@@ -90,6 +92,10 @@ struct MainTabView: View {
         // 这样"写完第一封信""累计满 7 天"在任何入口完成都能被捕捉到。
         .onChange(of: checkIns.count) { _, _ in evaluateAuthPrompt() }
         .onChange(of: sealedLetterCount) { _, _ in evaluateAuthPrompt() }
+        // 导出发生在设置页里，回到主界面时才有机会弹 —— 不在导出当场打断分享面板。
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { evaluateAuthPrompt() }
+        }
     }
 
     private var sealedLetterCount: Int {
@@ -108,7 +114,7 @@ struct MainTabView: View {
         let satisfied = AuthPromptResolver.satisfiedTriggers(
             sealedLetterCount: sealedLetterCount,
             totalCheckIns: checkIns.count,
-            didRequestExport: false,
+            didRequestExport: flags.isSet(AppFlagKey.didRequestExport),
             isAfterExam: false
         )
         let shown = Set(AuthPromptTrigger.allCases.filter { flags.isSet($0.flagKey) })

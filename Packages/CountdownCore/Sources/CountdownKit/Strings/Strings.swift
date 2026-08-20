@@ -498,6 +498,8 @@ public enum Strings {
     // MARK: - 通知（需求文档 5.11）—— 正文资料未提供
 
     public enum Notifications {
+        /// 节点通知与考试当天通知共用的标题。
+        public static let title = missing("节点通知标题")
         public static func milestone(_ days: Int) -> String { missing("节点通知正文·还剩\(days)天") }
         public static let letterOpen = missing("信件开启日通知正文")
         public static let examDayMorning = missing("考试当天早上的祝福通知正文")

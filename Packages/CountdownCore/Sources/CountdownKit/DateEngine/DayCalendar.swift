@@ -81,6 +81,15 @@ public struct DayCalendar: Sendable {
         calendar.isDate(a, inSameDayAs: b)
     }
 
+    /// 某一天的整点时刻。用于本地通知排程。
+    ///
+    /// 走同一个 `calendar` 实例，和天数计算共用时区 ——
+    /// 否则"还剩 100 天"是按一个时区算的，推送时刻是按另一个时区排的，
+    /// 跨时区旅行时会在错误的日子推送。
+    public func time(hour: Int, minute: Int = 0, on date: Date) -> Date? {
+        calendar.date(bySettingHour: hour, minute: minute, second: 0, of: startOfDay(date))
+    }
+
     // MARK: - 取值
 
     public func year(of date: Date) -> Int { calendar.component(.year, from: date) }

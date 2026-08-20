@@ -12,6 +12,15 @@ public enum AppFlagKey {
     /// 通知权限是否已请求过。时机为**第一次打卡之后**，绝不在首次启动时请求（5.11）。
     public static let notificationPermissionAsked = "notification_permission_asked"
 
+    /// 通知总开关（设置页）。
+    ///
+    /// 与系统授权状态是**两件事**：这个记的是「想不想收」，系统记的是「能不能收」。
+    /// 合成一个会丢信息 —— 用户在系统里关掉再打开，不该顺带把 App 内的选择也改掉。
+    public static let notificationsEnabled = "notifications_enabled"
+
+    /// 用户主动导出过数据。登录价值时刻 `.export` 的触发依据。
+    public static let didRequestExport = "did_request_export"
+
     /// 登录价值时刻触发点。**每个触发点一生只弹一次**，关闭后不再重复。
     public enum AuthPrompt: String, CaseIterable, Sendable {
         /// 写完第一封未来信件后 —— **最高优先级**。
