@@ -414,6 +414,19 @@ public enum Strings {
         public static let body = missing("小组件添加引导·正文")
     }
 
+    // MARK: - 小组件本身
+
+    public enum Widget {
+        /// 还没走完引导时的占位。**绝不显示 0 天** —— 那会让人以为倒计时已经结束。
+        public static let notConfigured = missing("小组件占位态文案（尚未完成引导时）")
+
+        public static let smallDisplayName = missing("小组件名称·桌面小号")
+        public static let mediumDisplayName = missing("小组件名称·桌面中号")
+        public static let circularDisplayName = missing("小组件名称·锁屏圆形")
+        public static let rectangularDisplayName = missing("小组件名称·锁屏矩形")
+        public static let widgetDescription = missing("小组件描述（添加面板里的说明）")
+    }
+
     // MARK: - 考后接力（需求文档 5.12）—— 文案资料未提供
 
     public enum PostExam {

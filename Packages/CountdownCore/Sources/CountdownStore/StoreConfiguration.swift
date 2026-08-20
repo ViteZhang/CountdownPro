@@ -31,6 +31,17 @@ public struct StoreConfiguration: Sendable {
         self.censusCacheKey = censusCacheKey
     }
 
+    /// 全 App 共用的配置。
+    ///
+    /// `appGroupIdentifier` 必须与 App target 和 Widget target 的
+    /// App Groups entitlement 完全一致，否则小组件读不到数据（表现为永远的占位态）。
+    ///
+    /// 注：产品名尚未拍板（需求文档待决事项 1），这里的标识符是按仓库名取的，
+    /// 定名后需同步修改 entitlements、Bundle ID 与本行。
+    public static let shared = StoreConfiguration(
+        appGroupIdentifier: "group.com.countdownpro.shared"
+    )
+
     public var containerURL: URL? {
         #if canImport(Darwin)
         return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)

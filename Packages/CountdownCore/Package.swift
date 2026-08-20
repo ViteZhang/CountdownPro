@@ -11,11 +11,14 @@ let package = Package(
         .library(name: "DesignTokens", targets: ["DesignTokens"]),
         // SwiftData 持久化 + 仓储。
         .library(name: "CountdownStore", targets: ["CountdownStore"]),
+        // App 与 Widget 共用的视图组件（环 / 进度条 / 树）。
+        .library(name: "CountdownUI", targets: ["CountdownUI"]),
     ],
     targets: [
         .target(name: "CountdownKit"),
         .target(name: "DesignTokens", dependencies: ["CountdownKit"]),
         .target(name: "CountdownStore", dependencies: ["CountdownKit"]),
+        .target(name: "CountdownUI", dependencies: ["CountdownKit", "DesignTokens"]),
         .testTarget(name: "CountdownKitTests", dependencies: ["CountdownKit"]),
         .testTarget(name: "DesignTokensTests", dependencies: ["DesignTokens"]),
     ]

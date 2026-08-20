@@ -20,9 +20,14 @@ Packages/CountdownCore/          本地 SPM 包，App 与 Widget 共用
       Format/                    CensusFormatter / DateDisplay / PhoneMask
       Strings/                   全部面向用户的文案
       Sync/                      ExportSnapshot / MergeRules
+      Widget/                    WidgetTimeline（预生成 7 天的纯逻辑）
     DesignTokens/                颜色、字号字重、圆角间距、动效时长
+    CountdownUI/                 App 与 Widget 共用的视图：环 / 进度条 / 树
     CountdownStore/              SwiftData 模型 + App Group 配置 + Keychain 加密
-  Tests/                         94 个测试，`swift test`
+  Tests/                         104 个测试，`swift test`
+CountdownPro/                    App target
+CountdownWidgets/                Widget Extension（四种）
+project.yml                      XcodeGen 工程描述
 ```
 
 ## 硬约束（改动前请先读完对应的决策条目）
@@ -104,6 +109,19 @@ Packages/CountdownCore/          本地 SPM 包，App 与 Widget 共用
 视图层**只能引用 token**，禁止字面量颜色值和 magic number 尺寸。
 视觉后续会用 Claude Design 精修，改动必须只发生在 `DesignTokens` 这一层。
 
+## 打开工程
+
+Xcode 工程由 XcodeGen 生成，`.xcodeproj` **不入库**（避免 `.pbxproj` 的合并冲突）：
+
+```bash
+brew install xcodegen
+xcodegen generate
+open CountdownPro.xcodeproj
+```
+
+App 与 Widget 两个 target 必须使用**同一个 App Group**，否则小组件读不到数据
+（表现为永远的占位态）。三处要一致：两个 `.entitlements` 与 `StoreConfiguration.shared`。
+
 ## 跑测试
 
 ```bash
@@ -111,4 +129,18 @@ cd Packages/CountdownCore && swift test
 ```
 
 `CountdownKit` 与 `DesignTokens` 是纯 Foundation，Linux / macOS 都能跑。
-`CountdownStore` 依赖 SwiftData/CryptoKit，只在 Apple 平台编译。
+`CountdownStore` 与 `CountdownUI` 依赖 SwiftData / SwiftUI，只在 Apple 平台编译，
+**Linux 上这两个 target 会被条件编译整体跳过** —— 在 Linux 上 build 通过不代表它们没问题，
+必须在 Xcode 里验一次。
+
+## 小组件的两条硬规则
+
+1. **完全离线。** Timeline 预生成未来 7 天的 entry（`WidgetTimelineBuilder`），
+   数据全部来自 App Group 内的本地存储，小组件从不发起网络请求、也从不解密信件。
+2. **同考人数只出现在"今天"那一条 entry 上。** 缓存里的数字是今天的人数，
+   铺到未来 6 天，小组件就会在明天用昨天的数据说「今天有 41.2 万人和你一起」——
+   那正是 D-09 禁止的事。未来的 entry 一律隐藏该模块。缓存本身也带日期戳，隔夜不采用。
+
+锁屏组件会被系统去色，所以 `CircularWidgetView` / `RectangularWidgetView`
+**刻意不引用 Palette**，全部走 `.primary` / `.tertiary` 交给系统染色管线 ——
+引用了 palette 反而会在去色后糊成一团。
