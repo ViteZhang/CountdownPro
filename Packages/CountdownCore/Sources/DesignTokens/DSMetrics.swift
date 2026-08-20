@@ -67,3 +67,47 @@ public enum DSRing {
     /// **填充比例 = 已走过比例**（设计决策 D-01），不是打卡完成率。
     public static let fillIsPassedRatio = true
 }
+
+/// 具名字号。
+///
+/// 视图层禁止出现字面量字号 —— 一律引用这里的常量，
+/// 后续视觉精修只改这一处。字重由字号自动推导（见 `DSFontWeight`），所以这里只需给尺寸。
+public enum DSType {
+    // 首页
+    /// 进度环中心的剩余天数。
+    ///
+    /// 需求文档 5.2 给的区间是 `56–66`，原型用了 `68` —— 取区间内的 64，以需求文档为准。
+    public static let ringNumber: Double = 64
+    /// 环内副标题「天后见分晓」/ 分割线下「你已走过 X 天」
+    public static let ringCaption: Double = 13
+    /// 顶部栏考试名
+    public static let navTitle: Double = 16
+    /// 顶部栏日期
+    public static let navSubtitle: Double = 12
+    /// 数据卡大数字
+    public static let statNumber: Double = 23
+    public static let statLabel: Double = 11
+
+    // 通用
+    public static let screenTitle: Double = 20
+    public static let question: Double = 23
+    public static let bodyLarge: Double = 15
+    public static let body: Double = 14
+    public static let caption: Double = 12
+    public static let captionSmall: Double = 11
+    public static let footnote: Double = 10.5
+
+    // 引导 / 结果
+    public static let onboardingResult: Double = 82
+    public static let onboardingDate: Double = 40
+
+    // 分享卡（导出为 1080×1440 时整体等比放大）
+    public static let cardBigNumber: Double = 60
+    public static let cardMilestoneNumber: Double = 96
+    public static let cardQuote: Double = 16
+    public static let cardWatermark: Double = 9
+
+    // 用户写的内容（衬线）
+    public static let userNote: Double = 15
+    public static let userLetter: Double = 16
+}
