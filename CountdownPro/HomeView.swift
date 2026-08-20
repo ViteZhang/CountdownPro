@@ -5,6 +5,7 @@ import CountdownStore
 import CountdownUI
 import DesignTokens
 import WidgetKit
+import UIKit
 
 /// 首页（需求文档 5.2）。
 ///
@@ -30,6 +31,11 @@ struct HomeView: View {
 
     @State private var showingNoteSheet = false
     @State private var toast: String?
+    @State private var prompt: AppOpenPrompt?
+    @State private var shareCards: [ShareCardKind: ShareCardContent]?
+    @State private var shareInitialKind: ShareCardKind = .milestone
+    @State private var readingLetter: Letter?
+    @State private var resolvedPrompt = false
 
     private var palette: Palette {
         Theme(skin: .default, scheme: colorScheme == .dark ? .dark : .light).palette
@@ -37,6 +43,8 @@ struct HomeView: View {
 
     private let cal = DayCalendar.current
     private var display: DateDisplay { DateDisplay(cal: cal) }
+    private var flags: FlagStore { FlagStore(context: context, cal: cal) }
+    private var cardBuilder: ShareCardBuilder { ShareCardBuilder(cal: cal) }
 
     private var summary: HomeSummary {
         HomeSummaryBuilder.build(
@@ -52,7 +60,7 @@ struct HomeView: View {
                              isOpened: $0.isOpened, isDraft: $0.isDraft)
             },
             censusCount: nil, // 由 CensusService 注入，未登录/无网络时保持 nil（D-09）
-            shownMilestoneDays: [],
+            shownMilestoneDays: flags.shownMilestoneDays(),
             previousTotalCheckIns: checkIns.count,
             cal: cal
         )
@@ -75,10 +83,22 @@ struct HomeView: View {
         .background(palette.background.color.ignoresSafeArea())
         .sheet(isPresented: $showingNoteSheet) {
             NoteSheetView(palette: palette) { text in
-                CheckInService(context: context, cal: cal).addNote(text)
+                guard let note = CheckInService(context: context, cal: cal).addNote(text) else { return }
+                // 5.3 第 5 步：写完保存 → 触发心里话分享卡入口（**不强制**）。
+                openShareSheet(.note, note: note)
             }
             .presentationDetents([.height(320)])
         }
+        .sheet(item: shareBinding) { box in
+            ShareCardSheet(cards: box.cards, palette: palette, initialKind: shareInitialKind)
+        }
+        .fullScreenCover(item: $prompt) { prompt in
+            promptView(prompt)
+        }
+        .fullScreenCover(item: $readingLetter) { letter in
+            LetterReadView(letter: letter, palette: palette)
+        }
+        .task { resolvePrompt() }
         .overlay(alignment: .top) { toastView }
     }
 
@@ -95,16 +115,26 @@ struct HomeView: View {
                     .foregroundStyle(palette.textSecondary.color)
             }
             Spacer()
-            // 设置放首页右上角（信息架构第 3 章）
-            Button {
-                toast = Strings.missing("设置页（开发顺序后续接入）")
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 19, weight: .light))
-                    .foregroundStyle(palette.textSecondary.color)
+            HStack(spacing: DSSpacing.md) {
+                // 5.8.2：用户可随时在首页右上角手动生成任意类型卡片。
+                // 注：信息架构第 3 章把设置也放在右上角，两者并存于此。
+                Button { openShareSheet(.milestone) } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 18, weight: .light))
+                        .foregroundStyle(palette.textSecondary.color)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    toast = Strings.missing("设置页（开发顺序后续接入）")
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 19, weight: .light))
+                        .foregroundStyle(palette.textSecondary.color)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Strings.Settings.title)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Strings.Settings.title)
         }
         .padding(.top, DSSpacing.sm + 2)
     }
@@ -287,5 +317,93 @@ struct HomeView: View {
                     }
                 }
         }
+    }
+
+    // MARK: - 分享卡
+
+    /// `sheet(item:)` 需要一个 Identifiable 包装。
+    private struct ShareBox: Identifiable {
+        let id = UUID()
+        let cards: [ShareCardKind: ShareCardContent]
+    }
+
+    private var shareBinding: Binding<ShareBox?> {
+        Binding(
+            get: { shareCards.map(ShareBox.init(cards:)) },
+            set: { if $0 == nil { shareCards = nil } }
+        )
+    }
+
+    private func openShareSheet(_ kind: ShareCardKind, note: Note? = nil) {
+        let c = summary.countdown
+        var cards: [ShareCardKind: ShareCardContent] = [
+            .milestone: cardBuilder.milestone(examTitle: exam.title, countdown: c)
+        ]
+        if let note {
+            cards[.note] = cardBuilder.note(
+                content: note.content, date: note.date,
+                nthCheckInDay: summary.totalCheckIns, countdown: c,
+                censusDisplay: summary.censusDisplay
+            )
+        }
+        if c.isExamDay || c.isAfterExam {
+            cards[.zero] = cardBuilder.zero(
+                examDate: exam.targetDate, countdown: c,
+                totalCheckIns: summary.totalCheckIns, totalNotes: summary.totalNotes
+            )
+        }
+        shareInitialKind = cards[kind] != nil ? kind : .milestone
+        shareCards = cards
+    }
+
+    // MARK: - 开屏全屏提示
+
+    /// 打开 App 时最多弹一个。**信件优先于分享卡** —— 信是不可重建的。
+    private func resolvePrompt() {
+        guard !resolvedPrompt else { return }
+        resolvedPrompt = true
+        prompt = AppOpenPromptResolver.resolve(
+            countdown: summary.countdown,
+            letters: letters.map {
+                LetterDigest(id: $0.id, writtenAt: $0.writtenAt, openAt: $0.openAt,
+                             isOpened: $0.isOpened, isDraft: $0.isDraft)
+            },
+            deferredLetterIDs: flags.lettersDeferredToday(letterIDs: letters.map(\.id)),
+            shownMilestoneDays: flags.shownMilestoneDays(),
+            today: .now,
+            cal: cal
+        )
+    }
+
+    @ViewBuilder
+    private func promptView(_ prompt: AppOpenPrompt) -> some View {
+        switch prompt {
+        case .letterDue(let letterID, let writtenDaysAgo):
+            LetterDuePromptView(writtenDaysAgo: writtenDaysAgo, palette: palette) {
+                self.prompt = nil
+                readingLetter = letters.first { $0.id == letterID }
+            } onLater: {
+                // 当天不再弹，次日再触发，直到被拆开。
+                flags.deferLetterPrompt(letterID: letterID)
+                self.prompt = nil
+            }
+
+        case .milestoneCard(let daysRemaining):
+            let content = cardBuilder.milestone(examTitle: exam.title, countdown: summary.countdown)
+            MilestonePromptView(content: content, palette: palette) {
+                markMilestoneShown(daysRemaining)
+                self.prompt = nil
+                shareInitialKind = .milestone
+                shareCards = [.milestone: content]
+            } onDecline: {
+                // 每个节点只触发一次，用户关闭后不再重复弹出。
+                markMilestoneShown(daysRemaining)
+                self.prompt = nil
+            }
+        }
+    }
+
+    private func markMilestoneShown(_ daysRemaining: Int) {
+        flags.set(Milestone(daysRemaining: daysRemaining).flagKey)
     }
 }
