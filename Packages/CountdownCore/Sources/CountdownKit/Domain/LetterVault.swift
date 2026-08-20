@@ -6,6 +6,17 @@ public protocol LetterCipher: Sendable {
     func reveal(_ ciphertext: Data) throws -> String
 }
 
+/// 解密凭证。
+///
+/// 这个类型存在的唯一理由，是让"想读一封已封存的信"必须先说出它的开启日 ——
+/// 从而不可能在调用处忘记做日期校验（D-08）。
+public enum LetterAccess: Equatable, Sendable {
+    /// 草稿：可查看、可修改。
+    case draft
+    /// 已封存：到期才可见。
+    case sealed(openAt: Date)
+}
+
 public enum LetterVaultError: Error, Equatable {
     /// 开启日未到。**这是唯一正确的失败方式** —— 不返回部分内容、不返回长度、不返回摘要。
     case notYetOpenable(daysRemaining: Int)
@@ -48,11 +59,22 @@ public struct LetterVault: Sendable {
 
     /// **全产品唯一的解密入口。**
     ///
-    /// - Throws: `LetterVaultError.notYetOpenable` 当 `today < openAt`。
-    public func reveal(sealed: Data, openAt: Date, today: Date) throws -> String {
-        let remaining = cal.days(from: today, to: openAt)
-        guard remaining <= 0 else {
-            throw LetterVaultError.notYetOpenable(daysRemaining: remaining)
+    /// 草稿与已封存的信走同一个入口，但访问凭证不同：
+    /// `.sealed` 这个 case **必须**携带开启日，构造它就等于接受日期校验。
+    /// 没有"绕过校验"的第三种调用方式。
+    ///
+    /// - Throws: `LetterVaultError.notYetOpenable` 当封存信的 `today < openAt`。
+    public func reveal(sealed: Data, access: LetterAccess, today: Date) throws -> String {
+        switch access {
+        case .draft:
+            // 草稿可查看、可修改、可删除（信件文案表第 0 节）。
+            // 它还没被"封起来"，重量尚未建立。
+            break
+        case .sealed(let openAt):
+            let remaining = cal.days(from: today, to: openAt)
+            guard remaining <= 0 else {
+                throw LetterVaultError.notYetOpenable(daysRemaining: remaining)
+            }
         }
         do {
             return try cipher.reveal(sealed)

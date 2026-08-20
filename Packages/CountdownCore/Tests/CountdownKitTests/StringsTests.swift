@@ -41,7 +41,6 @@ final class StringsTests: XCTestCase {
 
     /// 资料未给的文案必须是刺眼占位符，不能被误当成成品。
     func testMissingCopyIsLoudlyMarked() {
-        XCTAssertTrue(Strings.Letters.composeTitle.hasPrefix("⟪待补文案："))
         XCTAssertTrue(Strings.Settings.title.hasPrefix("⟪待补文案："))
         XCTAssertTrue(Strings.ShareCard.watermark.hasPrefix("⟪待补文案："))
         XCTAssertTrue(Strings.Notifications.letterOpen.hasPrefix("⟪待补文案："))
@@ -66,6 +65,75 @@ final class StringsTests: XCTestCase {
     func testAuthUsesLaterNotSkip() {
         XCTAssertEqual(Strings.Auth.Prompt.later, "以后再说")
         XCTAssertFalse(Strings.Auth.Prompt.later.contains("跳过"))
+    }
+
+    // MARK: - 信件文案禁区（信件文案表第 9 节）
+
+    /// 这个功能的全部价值在于情感重量，任何一句被改成产品腔，重量就没了。
+    /// 这条测试把禁区清单钉死 —— 它拦的不是拼写，是语气。
+    func testLetterCopyAvoidsForbiddenPhrasings() {
+        let forbidden = [
+            "亲爱的自己", "致未来的我",   // 替用户定调，很多人写不出这种口吻
+            "时光胶囊",                   // 产品术语，不是人话
+            "见证你的成长", "记录你的蜕变", // 鸡汤
+            "相信努力会有回报",            // 预设结果，考砸的人看到会刺痛
+            "恭喜",                       // 这不是成就
+            "保存成功", "操作成功",        // 系统腔
+            "抱歉",                       // 不道歉
+            "加油", "冲鸭",
+        ]
+        let all = [
+            Strings.Letters.title, Strings.Letters.subtitle, Strings.Letters.writeNew,
+            Strings.Letters.emptyTitle, Strings.Letters.emptySubtitle, Strings.Letters.emptyAction,
+            Strings.Letters.composeTitle, Strings.Letters.composeSubtitle,
+            Strings.Letters.composePlaceholder, Strings.Letters.composeNext,
+            Strings.Letters.draftPromptTitle, Strings.Letters.draftPromptBody,
+            Strings.Letters.triggerTitle, Strings.Letters.triggerSubtitle,
+            Strings.Letters.resultDayHint,
+            Strings.Letters.customDateBody, Strings.Letters.customDateInPast,
+            Strings.Letters.customDateAfterExam, Strings.Letters.customDateIsToday,
+            Strings.Letters.sealTitle, Strings.Letters.sealConfirm, Strings.Letters.sealCancel,
+            Strings.Letters.sealedDoneTitle, Strings.Letters.sealedDoneBack,
+            Strings.Letters.dueTitle, Strings.Letters.dueOpen, Strings.Letters.dueLater,
+            Strings.Letters.readDone,
+            Strings.Letters.deleteDraftTitle, Strings.Letters.deleteDraftBody,
+            Strings.Letters.deleteSealedTitle, Strings.Letters.deleteSealedBody,
+            Strings.Letters.deleteOpenedTitle, Strings.Letters.deleteOpenedBody,
+            Strings.Letters.deleteConfirm, Strings.Letters.deleteCancel,
+            Strings.Letters.deletedToast, Strings.Letters.lengthFull,
+            Strings.Letters.notificationTitle, Strings.Letters.notificationBodyNightBefore,
+        ] + [Strings.Letters.sealBody(openDate: "2027年2月27日"),
+             Strings.Letters.sealedDoneSubtitle(days: 100),
+             Strings.Letters.notificationBody(daysAgo: 100)]
+
+        for text in all {
+            for phrase in forbidden {
+                XCTAssertFalse(text.contains(phrase), "「\(phrase)」出现在：\(text)")
+            }
+            XCTAssertFalse(text.contains("！"), text)
+        }
+    }
+
+    /// 「出分那天」的副文案是刻意中性的。
+    /// 出分日会把用户分成截然不同的两群，提前用一句中性的话打个底，
+    /// 比考完之后再想办法补救要好。
+    func testResultDayHintStaysNeutral() {
+        XCTAssertEqual(Strings.Letters.resultDayHint, "不管结果怎样，那天你可能会需要它")
+        for presumptuous in ["好成绩", "理想", "梦想", "如愿", "上岸"] {
+            XCTAssertFalse(Strings.Letters.resultDayHint.contains(presumptuous))
+        }
+    }
+
+    /// 封存确认的主按钮不加「确认」二字 ——「封起来」本身就是动作；
+    /// 次按钮用「再看看」不用「取消」；删除的次按钮用有立场的「留着」。
+    func testActionVerbsAreNotGenericChrome() {
+        XCTAssertEqual(Strings.Letters.sealConfirm, "封起来")
+        XCTAssertFalse(Strings.Letters.sealConfirm.contains("确认"))
+        XCTAssertEqual(Strings.Letters.sealCancel, "再看看")
+        XCTAssertEqual(Strings.Letters.deleteCancel, "留着")
+        for text in [Strings.Letters.sealCancel, Strings.Letters.deleteCancel] {
+            XCTAssertNotEqual(text, "取消")
+        }
     }
 
     /// 注销告知的第 3 条是最重要的一条，必须用强调色。

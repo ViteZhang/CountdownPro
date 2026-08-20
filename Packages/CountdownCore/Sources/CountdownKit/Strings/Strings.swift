@@ -134,10 +134,14 @@ public enum Strings {
         /// 同考人数（5.7）。`count` 已由 CensusFormatter 格式化为「41.2」这样的字符串。
         public static func together(_ wan: String) -> String { "今天有 \(wan) 万人和你一起" }
 
-        /// 底部提示条：信件（5.6）
-        public static func letterHintToday(writtenDaysAgo: Int) -> String {
-            "\(writtenDaysAgo) 天前写给自己的信，今天可以开启"
-        }
+        /// 底部提示条：信件（需求文档 5.6 / 信件文案表第 8 节）。
+        ///
+        /// 三种条件同时满足时的优先级：**今天到期 > 草稿未完成 > 即将开启**。
+        ///
+        /// 注：原型首页的「100 天前写给自己的信，今天可以开启」已被文案表
+        /// 第 8 节的「有一封信可以拆开了」取代 —— 后者是这一组的专用文案表，且更短。
+        public static let letterHintDueToday = "有一封信可以拆开了"
+        public static let letterHintDraft = "有一封信还没写完"
         public static func letterHintUpcoming(writtenDaysAgo: Int, inDays: Int) -> String {
             "\(writtenDaysAgo) 天前写给自己的信，\(inDays) 天后开启"
         }
@@ -185,44 +189,145 @@ public enum Strings {
         public static let editNote = missing("心里话编辑入口文案")
     }
 
-    // MARK: - 信箱（需求文档 5.6）
+    // MARK: - 信箱与未来信件（需求文档 5.6 / 《未来信件 · 完整文案表》）
 
+    /// # 这一组文案的特殊性
+    /// 这个功能的全部价值在于**情感重量**，任何一句被改成产品腔，重量就没了。
+    /// 文案表第 9 节列了一份禁区清单（「亲爱的自己」「时光胶囊」「见证你的成长」
+    /// 「相信努力会有回报」「恭喜你完成封存」「保存成功」…），有测试守着。
     public enum Letters {
+
+        // MARK: 信箱页
         public static let title = "信箱"
         public static let subtitle = "写给未来的自己"
+        public static let writeNew = "＋ 写一封新的信"
 
+        // 空状态
+        public static let emptyTitle = "还没有写过信"
+        public static let emptySubtitle = "写一封给以后的自己。\n封起来，到了那天再拆。"
+        public static let emptyAction = "写第一封"
+
+        // MARK: 列表项
+        public static let stateDraft = "草稿"
+        public static func lastEdited(_ date: String) -> String { "最后修改 \(date)" }
+        public static func sealedRemaining(_ n: Int) -> String { "封存中 · 还剩 \(n) 天" }
         public static let readyToOpen = "可以开启了"
         public static let tapToOpen = "点击开启 →"
         public static func writtenDaysAgo(_ n: Int) -> String { "写于 \(n) 天前" }
         public static func writtenOn(_ date: String) -> String { "写于 \(date)" }
-        public static func sealedRemaining(_ n: Int) -> String { "封存中 · 还剩 \(n) 天" }
         public static func openedOn(_ date: String) -> String { "已开启 · \(date)" }
+
+        /// 封存后无法查看，也无法修改（原型底部说明）。
+        public static let sealedFootnote = "封存后无法查看，也无法修改。这是它值得被等待的原因。"
+
+        // MARK: 写信页
+        public static let composeNavTitle = "写一封信"
+        public static let composeTitle = "想对以后的自己说点什么？"
+        /// 第二句是关键 —— 提前建立预期，封存的重量来自这里。
+        public static let composeSubtitle = "只有你会看到。\n封存之后，你也看不到了。"
+        /// **降低门槛，不制造表达压力。**
+        public static let composePlaceholder = "不用写得好。\n以后的你只想知道，现在的你是什么样。"
+        public static func lengthRemaining(_ n: Int) -> String { "还能写 \(n) 字" }
+        /// 不用「已达上限」。
+        public static let lengthFull = "写满了"
+        /// 不用「下一步」，直接说要去哪。
+        public static let composeNext = "选一个开启的日子"
+        public static let maxLength = 1000
+
+        // 返回时的草稿确认
+        public static let draftPromptTitle = "先存着？"
+        public static let draftPromptBody = "还没封存的信可以存成草稿，\n随时回来接着写。"
+        public static let draftPromptSave = "存成草稿"
+        /// 「不要了」直接丢弃，**不再二次确认** —— 用户已经明确表达了。
+        public static let draftPromptDiscard = "不要了"
+
+        // MARK: 选择开启时机
+        public static let triggerNavTitle = "什么时候拆开"
+        public static let triggerTitle = "选一个日子"
+        public static let triggerSubtitle = "到了那天，它会自己出现。"
 
         public static func triggerLabel(_ trigger: LetterTrigger) -> String {
             switch trigger {
-            case .d100:        return missing("信件节点名·还剩100天")
-            case .d50:         return missing("信件节点名·还剩50天")
-            case .nightBefore: return "考前一晚开启"
-            case .resultDay:   return "出分日开启"
-            case .custom:      return missing("信件节点名·自定义")
+            case .d100:        return "还剩 100 天的那天"
+            case .d50:         return "还剩 50 天的那天"
+            case .nightBefore: return "考试前一晚"
+            case .resultDay:   return "出分那天"
+            case .custom:      return "我自己选一天"
             }
         }
 
-        public static let writeNew = "+ 写一封新的信"
-        /// 设计决策 D-08：可以偷看的信就不是信，是备忘录。
-        public static let sealedFootnote = "封存后无法查看，也无法修改。这是它值得被等待的原因。"
+        /// 预设节点的副文案是换算出来的实际日期，让用户知道到底是哪天。
+        /// **「出分那天」例外** —— 它的副文案是一句刻意中性的话。
+        ///
+        /// 出分日会把用户分成截然不同的两群，提前用一句中性的话打个底，
+        /// 比考完之后再想办法补救要好。
+        /// 绝不能改成「查到好成绩的那一刻」这类预设结果的说法。
+        public static let resultDayHint = "不管结果怎样，那天你可能会需要它"
 
+        // 自定义日期
+        public static let customDateTitle = "选一天"
+        public static let customDateBody = "哪天都行，只要还没到。"
+        public static let customDateInPast = "这天已经过去了。选一个以后的日子。"
+        public static let customDateAfterExam = "这天在考试之后了。确定吗？"
+        public static let customDateIsToday = "今天就拆的话，写下来直接看就行了。"
+
+        /// 用户改了考试日期，预设节点信件的开启日跟着变。
+        public static func triggersAdjusted(_ count: Int) -> String {
+            "有 \(count) 封信的开启日期跟着调整了"
+        }
+
+        // MARK: 封存确认（最关键的一屏，必须全屏）
+        public static let sealTitle = "封起来？"
+        public static func sealBody(openDate: String) -> String {
+            "封存之后，你就看不到它了。\n不能改，也不能提前拆。\n\n到了 \(openDate)，\n它会自己出现。"
+        }
+        /// 主按钮不加「确认」二字 —— 「封起来」本身就是动作。
+        public static let sealConfirm = "封起来"
+        /// 次按钮用「再看看」，不用「取消」。
+        public static let sealCancel = "再看看"
+
+        // 封存成功。**不做庆祝动效** —— 这不是成就，是一次托付。
+        public static let sealedDoneTitle = "封好了"
+        public static func sealedDoneSubtitle(days: Int) -> String { "\(days) 天后见" }
+        public static let sealedDoneBack = "回信箱"
+
+        // MARK: 开启
+        public static let dueTitle = "有一封信到期了"
+        public static func dueSubtitle(daysAgo: Int) -> String { "\(daysAgo) 天前的你写了点东西" }
+        public static let dueOpen = "拆开"
+        /// 「待会儿」当天不再弹，次日再触发，直到被拆开。
+        public static let dueLater = "待会儿"
+
+        public static func readHeader(_ date: String) -> String { "写于 \(date)" }
         public static func signature(daysAgo: Int) -> String { "—— \(daysAgo) 天前的你" }
+        public static let signatureOverAYear = "—— 一年多以前的你"
+        public static let readDone = "读完了"
 
-        public static let maxLength = 1000
+        // MARK: 删除。**不做撤销** —— 撤销会削弱"删除是认真的"这件事，
+        // 而这个功能的全部价值就建立在不可逆之上。
+        public static let deleteDraftTitle = "删掉这份草稿？"
+        public static let deleteDraftBody = "删了就没有了。"
 
-        // 资料未提供：
-        public static let composeTitle = missing("写信页标题")
-        public static let composePlaceholder = missing("写信页正文 placeholder")
-        public static let composeTriggerSectionTitle = missing("写信页·选择开启时机的标题")
-        public static let sealConfirm = missing("封存前的确认文案")
-        public static let sealDone = missing("封存成功提示")
-        public static let deleteConfirm = missing("删除信件的二次确认文案（需说明不可恢复）")
+        /// 最重的一次删除。
+        public static let deleteSealedTitle = "删掉这封信？"
+        public static let deleteSealedBody = "它还没被拆开，你也没法再看一眼。\n删了就是真的没有了，没有备份。"
+
+        public static let deleteOpenedTitle = "删掉这封信？"
+        public static let deleteOpenedBody = "删了之后就读不到了。"
+
+        public static let deleteConfirm = "删掉"
+        /// 「留着」是有立场的动词，比「取消」好。
+        public static let deleteCancel = "留着"
+        public static let deletedToast = "删掉了"
+
+        // MARK: 通知
+        public static let notificationTitle = "有一封信到期了"
+        public static func notificationBody(daysAgo: Int) -> String {
+            "\(daysAgo) 天前的你写了点东西给现在的你"
+        }
+        public static let notificationBodyNightBefore = "是你自己留在这一天的"
+        /// 考前一晚那条推送定在 20:00，不要更晚 —— 不该在临睡前打扰。
+        public static let nightBeforeNotificationHour = 20
     }
 
     // MARK: - 分享卡（需求文档 5.8）

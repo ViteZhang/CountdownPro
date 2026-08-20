@@ -1,18 +1,16 @@
 import Foundation
 
-/// 首页底部提示条要展示的那封信（需求文档 5.6）。
-public struct LetterHint: Equatable, Sendable {
-    /// 这封信写于多少天前。文案里是「100 天前写给自己的信」。
-    public let writtenDaysAgo: Int
-    /// 还有几天开启。`0` 表示今天就能开。
-    public let daysUntilOpen: Int
-
-    public init(writtenDaysAgo: Int, daysUntilOpen: Int) {
-        self.writtenDaysAgo = writtenDaysAgo
-        self.daysUntilOpen = daysUntilOpen
-    }
-
-    public var isOpenableNow: Bool { daysUntilOpen == 0 }
+/// 首页底部提示条（需求文档 5.6 / 信件文案表第 8 节）。
+///
+/// 三种情况**互斥**，优先级：今天到期 > 草稿未完成 > 即将开启。
+/// 做成 enum 而不是带可选字段的 struct，是为了让"同时命中两种"在类型上不可能发生。
+public enum LetterHint: Equatable, Sendable {
+    /// 有信件今天（或更早）到期还没拆。
+    case dueToday
+    /// 有草稿没写完。
+    case draftInProgress
+    /// 最近一封信 ≤ 30 天后开启。
+    case upcoming(writtenDaysAgo: Int, inDays: Int)
 }
 
 /// 选提示条那封信时需要的最小信息。**刻意不含正文** ——
@@ -22,12 +20,15 @@ public struct LetterDigest: Equatable, Sendable {
     public let writtenAt: Date
     public let openAt: Date
     public let isOpened: Bool
+    /// 草稿。草稿可查看可修改，未封存，因此不参与"到期"判断。
+    public let isDraft: Bool
 
-    public init(id: String, writtenAt: Date, openAt: Date, isOpened: Bool) {
+    public init(id: String, writtenAt: Date, openAt: Date, isOpened: Bool, isDraft: Bool = false) {
         self.id = id
         self.writtenAt = writtenAt
         self.openAt = openAt
         self.isOpened = isOpened
+        self.isDraft = isDraft
     }
 }
 
@@ -96,37 +97,35 @@ public enum HomeSummaryBuilder {
         )
     }
 
-    /// 选出提示条要展示的那封信。
+    /// 选出提示条要展示的内容。
     ///
-    /// 优先级：
-    /// 1. **已到开启日但还没拆的** —— 取最早到期的那封。
-    ///    「开启日已过但用户未打开 App：下次打开时补触发」（5.6 边界情况）。
-    /// 2. 30 天内即将开启的 —— 取最近的那封。
-    /// 3. 都没有 → 不显示提示条。
+    /// 优先级（信件文案表第 8 节）：**今天到期 > 草稿未完成 > 即将开启**。
+    ///
+    /// 「到期」包含开启日已过但用户没打开 App 的情况 —— 下次打开时补触发（5.6 边界情况）。
     public static func letterHint(
         letters: [LetterDigest],
         today: Date,
         cal: DayCalendar = .current
     ) -> LetterHint? {
-        let pending = letters.filter { !$0.isOpened }
-        guard !pending.isEmpty else { return nil }
+        let sealed = letters.filter { !$0.isOpened && !$0.isDraft }
 
-        func hint(_ letter: LetterDigest) -> LetterHint {
-            LetterHint(
-                writtenDaysAgo: max(cal.days(from: letter.writtenAt, to: today), 0),
-                daysUntilOpen: max(cal.days(from: today, to: letter.openAt), 0)
-            )
+        if sealed.contains(where: { cal.days(from: today, to: $0.openAt) <= 0 }) {
+            return .dueToday
         }
 
-        let openable = pending.filter { cal.days(from: today, to: $0.openAt) <= 0 }
-        if let earliest = openable.min(by: { $0.openAt < $1.openAt }) {
-            return hint(earliest)
+        if letters.contains(where: \.isDraft) {
+            return .draftInProgress
         }
 
-        let upcoming = pending
-            .filter { cal.days(from: today, to: $0.openAt) <= letterHintWindowDays }
+        guard let next = sealed
+            .filter({ cal.days(from: today, to: $0.openAt) <= letterHintWindowDays })
             .min(by: { $0.openAt < $1.openAt })
-        return upcoming.map(hint)
+        else { return nil }
+
+        return .upcoming(
+            writtenDaysAgo: max(cal.days(from: next.writtenAt, to: today), 0),
+            inDays: max(cal.days(from: today, to: next.openAt), 0)
+        )
     }
 
     /// 今天是否要弹节点卡。

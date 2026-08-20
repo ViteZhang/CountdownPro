@@ -19,6 +19,7 @@ final class ExportSnapshotTests: XCTestCase {
                           createdAt: cal.day(2026, 12, 1), updatedAt: cal.day(2026, 12, 1))],
             letters: [.init(id: "L1", writtenAt: cal.day(2026, 8, 24), openAt: cal.day(2027, 6, 6),
                             openTrigger: .nightBefore, isOpened: false, openedAt: nil,
+                            isDraft: false, updatedAt: cal.day(2026, 8, 24),
                             content: nil, sealedContentBase64: "c2VhbGVk")]
         )
     }

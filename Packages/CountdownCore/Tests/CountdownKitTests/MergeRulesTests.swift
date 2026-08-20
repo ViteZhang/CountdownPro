@@ -79,11 +79,40 @@ final class MergeRulesTests: XCTestCase {
         XCTAssertEqual(merged.filter(\.isPrimary).count, 1)
     }
 
-    private func letter(_ id: String, opened: Bool, openedAt: Date? = nil, content: String? = nil)
-        -> ExportSnapshot.LetterDTO {
+    private func letter(_ id: String, opened: Bool, openedAt: Date? = nil, content: String? = nil,
+                        draft: Bool = false, updated: Date? = nil) -> ExportSnapshot.LetterDTO {
         .init(id: id, writtenAt: cal.day(2026, 8, 24), openAt: cal.day(2026, 12, 2),
               openTrigger: .d100, isOpened: opened, openedAt: openedAt,
+              isDraft: draft, updatedAt: updated ?? cal.day(2026, 8, 24),
               content: content, sealedContentBase64: opened ? nil : "c2VhbGVk")
+    }
+
+    // MARK: - 草稿与封存的合并（信件文案表第 0 节）
+
+    /// 两端都是草稿 → 后写入者胜，和心里话一样。
+    func testDraftConflictPrefersLatestUpdate() {
+        let older = letter("L1", opened: false, content: nil, draft: true, updated: cal.day(2026, 12, 1))
+        var newer = older
+        newer.updatedAt = cal.day(2026, 12, 5)
+        newer.sealedContentBase64 = "bmV3ZXI="
+        XCTAssertEqual(MergeRules.mergeLetters(local: [older], remote: [newer]).first?.sealedContentBase64,
+                       "bmV3ZXI=")
+        XCTAssertEqual(MergeRules.mergeLetters(local: [newer], remote: [older]).first?.sealedContentBase64,
+                       "bmV3ZXI=")
+    }
+
+    /// **封存不可逆。** 一端已封存、另一端还是草稿 → 结果是已封存。
+    ///
+    /// 否则同步会把一封已经"托付出去"的信变回可编辑，D-08 的全部重量就没了。
+    /// 注意这一条**不看 updatedAt** —— 草稿那一端更晚也不能翻案。
+    func testSealingIsIrreversibleAcrossSync() {
+        let draft = letter("L1", opened: false, draft: true, updated: cal.day(2026, 12, 9))
+        let sealed = letter("L1", opened: false, draft: false, updated: cal.day(2026, 12, 1))
+        for merged in [MergeRules.mergeLetters(local: [draft], remote: [sealed]),
+                       MergeRules.mergeLetters(local: [sealed], remote: [draft])] {
+            XCTAssertEqual(merged.count, 1)
+            XCTAssertFalse(merged[0].isDraft, "封存不可逆")
+        }
     }
 
     /// 信件不可修改，唯一会变的是「是否已开启」—— 任一端开启过即为已开启。

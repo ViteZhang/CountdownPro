@@ -6,62 +6,59 @@ final class HomeSummaryTests: XCTestCase {
     let cal = DayCalendar.fixed()
     lazy var today = cal.day(2026, 12, 2)
 
-    private func digest(_ id: String, written: Date, open: Date, opened: Bool = false) -> LetterDigest {
-        LetterDigest(id: id, writtenAt: written, openAt: open, isOpened: opened)
+    private func digest(_ id: String, written: Date, open: Date,
+                        opened: Bool = false, draft: Bool = false) -> LetterDigest {
+        LetterDigest(id: id, writtenAt: written, openAt: open, isOpened: opened, isDraft: draft)
     }
 
-    // MARK: - 信件提示条
+    // MARK: - 信件提示条（信件文案表第 8 节）
 
-    func testNoHintWhenNoPendingLetters() {
+    func testNoHintWhenNothingPending() {
         XCTAssertNil(HomeSummaryBuilder.letterHint(letters: [], today: today, cal: cal))
         let allOpened = [digest("L1", written: cal.day(2026, 8, 24), open: cal.day(2026, 12, 1), opened: true)]
         XCTAssertNil(HomeSummaryBuilder.letterHint(letters: allOpened, today: today, cal: cal))
     }
 
-    /// 原型首页那句：「100 天前写给自己的信，今天可以开启」
-    func testOpenableTodayHint() {
+    func testDueTodayHint() {
         let letters = [digest("L1", written: cal.day(2026, 8, 24), open: today)]
-        let hint = HomeSummaryBuilder.letterHint(letters: letters, today: today, cal: cal)
-        XCTAssertEqual(hint, LetterHint(writtenDaysAgo: 100, daysUntilOpen: 0))
-        XCTAssertTrue(hint!.isOpenableNow)
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: letters, today: today, cal: cal), .dueToday)
     }
 
     /// 5.6 边界：开启日已过但用户没打开 App → 下次打开时补触发。
-    func testOverdueLetterStillShowsAsOpenableNow() {
+    func testOverdueCountsAsDueToday() {
         let letters = [digest("L1", written: cal.day(2026, 8, 24), open: cal.day(2026, 11, 20))]
-        let hint = HomeSummaryBuilder.letterHint(letters: letters, today: today, cal: cal)
-        XCTAssertEqual(hint?.daysUntilOpen, 0)
-        XCTAssertTrue(hint!.isOpenableNow)
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: letters, today: today, cal: cal), .dueToday)
     }
 
-    /// 已到期的优先于即将到期的，且到期的里面取最早那封。
-    func testOverdueTakesPriorityAndEarliestFirst() {
-        let letters = [
-            digest("soon", written: cal.day(2026, 11, 1), open: cal.day(2026, 12, 10)),
-            digest("late", written: cal.day(2026, 9, 1), open: cal.day(2026, 11, 25)),
-            digest("earliest", written: cal.day(2026, 8, 1), open: cal.day(2026, 11, 20)),
-        ]
-        let hint = HomeSummaryBuilder.letterHint(letters: letters, today: today, cal: cal)
-        XCTAssertEqual(hint?.writtenDaysAgo, cal.days(from: cal.day(2026, 8, 1), to: today))
+    /// 优先级：**今天到期 > 草稿未完成 > 即将开启**。
+    func testHintPriorityOrder() {
+        let due = digest("due", written: cal.day(2026, 8, 24), open: today)
+        let draft = digest("draft", written: cal.day(2026, 12, 1), open: today, draft: true)
+        let soon = digest("soon", written: cal.day(2026, 11, 1), open: cal.day(2026, 12, 9))
+
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: [due, draft, soon], today: today, cal: cal),
+                       .dueToday)
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: [draft, soon], today: today, cal: cal),
+                       .draftInProgress)
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: [soon], today: today, cal: cal),
+                       .upcoming(writtenDaysAgo: 31, inDays: 7))
     }
 
-    /// 30 天窗口内才显示（5.6）。
-    func testUpcomingHintWithinThirtyDays() {
-        let inWindow = [digest("L1", written: cal.day(2026, 8, 24), open: cal.day(2026, 12, 9))]
-        XCTAssertEqual(
-            HomeSummaryBuilder.letterHint(letters: inWindow, today: today, cal: cal),
-            LetterHint(writtenDaysAgo: 100, daysUntilOpen: 7)
-        )
-
-        let exactlyThirty = [digest("L1", written: cal.day(2026, 8, 24), open: cal.day(2027, 1, 1))]
-        XCTAssertEqual(
-            HomeSummaryBuilder.letterHint(letters: exactlyThirty, today: today, cal: cal)?.daysUntilOpen, 30
-        )
+    /// 草稿没有"到期"这回事 —— 它还没封存。
+    func testDraftNeverCountsAsDue() {
+        let draft = digest("draft", written: cal.day(2026, 11, 1), open: cal.day(2026, 11, 1), draft: true)
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: [draft], today: today, cal: cal),
+                       .draftInProgress)
     }
 
-    func testNoHintBeyondThirtyDays() {
-        let far = [digest("L1", written: cal.day(2026, 8, 24), open: cal.day(2027, 1, 2))]
-        XCTAssertNil(HomeSummaryBuilder.letterHint(letters: far, today: today, cal: cal))
+    /// 30 天窗口内才提示（5.6）。
+    func testUpcomingWindow() {
+        let exactly30 = [digest("L1", written: cal.day(2026, 8, 24), open: cal.day(2027, 1, 1))]
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: exactly30, today: today, cal: cal),
+                       .upcoming(writtenDaysAgo: 100, inDays: 30))
+
+        let beyond = [digest("L1", written: cal.day(2026, 8, 24), open: cal.day(2027, 1, 2))]
+        XCTAssertNil(HomeSummaryBuilder.letterHint(letters: beyond, today: today, cal: cal))
     }
 
     func testNearestUpcomingWins() {
@@ -69,15 +66,14 @@ final class HomeSummaryTests: XCTestCase {
             digest("far", written: cal.day(2026, 10, 1), open: cal.day(2026, 12, 25)),
             digest("near", written: cal.day(2026, 11, 1), open: cal.day(2026, 12, 5)),
         ]
-        XCTAssertEqual(
-            HomeSummaryBuilder.letterHint(letters: letters, today: today, cal: cal)?.daysUntilOpen, 3
-        )
+        XCTAssertEqual(HomeSummaryBuilder.letterHint(letters: letters, today: today, cal: cal),
+                       .upcoming(writtenDaysAgo: 31, inDays: 3))
     }
 
     /// 提示条逻辑**不碰正文** —— LetterDigest 里根本没有那个字段（D-08）。
     func testHintNeverTouchesLetterBody() {
-        let mirror = Mirror(reflecting: digest("L1", written: today, open: today))
-        let names = mirror.children.compactMap(\.label)
+        let names = Mirror(reflecting: digest("L1", written: today, open: today))
+            .children.compactMap(\.label)
         XCTAssertFalse(names.contains("content"))
         XCTAssertFalse(names.contains("sealedContent"))
     }

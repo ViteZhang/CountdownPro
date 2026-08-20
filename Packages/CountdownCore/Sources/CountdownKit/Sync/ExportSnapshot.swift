@@ -87,15 +87,20 @@ public struct ExportSnapshot: Codable, Equatable, Sendable {
         public var openTrigger: LetterTrigger
         public var isOpened: Bool
         public var openedAt: Date?
+        /// 草稿。草稿参与同步合并；已封存的信 append-only。
+        public var isDraft: Bool
+        public var updatedAt: Date
         /// 仅当 `isOpened == true` 时有值。
         public var content: String?
-        /// 未开启时的密文。
+        /// 未开启时的密文。草稿同样以密文导出。
         public var sealedContentBase64: String?
 
         public init(id: String, writtenAt: Date, openAt: Date, openTrigger: LetterTrigger,
-                    isOpened: Bool, openedAt: Date?, content: String?, sealedContentBase64: String?) {
+                    isOpened: Bool, openedAt: Date?, isDraft: Bool = false, updatedAt: Date,
+                    content: String?, sealedContentBase64: String?) {
             self.id = id; self.writtenAt = writtenAt; self.openAt = openAt
             self.openTrigger = openTrigger; self.isOpened = isOpened; self.openedAt = openedAt
+            self.isDraft = isDraft; self.updatedAt = updatedAt
             self.content = content; self.sealedContentBase64 = sealedContentBase64
         }
     }

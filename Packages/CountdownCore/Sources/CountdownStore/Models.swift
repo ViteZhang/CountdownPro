@@ -116,6 +116,15 @@ public final class Letter {
     /// 已开启后缓存的明文。开启后永久可重读（5.6）。
     public var revealedContent: String?
 
+    /// 草稿。
+    ///
+    /// 1000 字写到一半误触返回就全部丢失，对这个功能来说不可接受。
+    /// `isDraft == true` 时内容可查看、可修改、可删除；
+    /// **封存后置 false 且不可逆** —— 之后只能删除。
+    public var isDraft: Bool
+    /// 草稿可修改，同步合并需要它。已封存的信不再变动。
+    public var updatedAt: Date
+
     public var openTrigger: LetterTrigger {
         get { LetterTrigger(rawValue: openTriggerRaw) ?? .custom }
         set { openTriggerRaw = newValue.rawValue }
@@ -126,7 +135,8 @@ public final class Letter {
         sealedContent: Data,
         writtenAt: Date = .now,
         openAt: Date,
-        openTrigger: LetterTrigger
+        openTrigger: LetterTrigger,
+        isDraft: Bool = false
     ) {
         self.id = id
         self.sealedContent = sealedContent
@@ -136,6 +146,18 @@ public final class Letter {
         self.isOpened = false
         self.openedAt = nil
         self.revealedContent = nil
+        self.isDraft = isDraft
+        self.updatedAt = writtenAt
+    }
+
+    /// 封存。**不可逆** —— 这是这个功能的全部价值所在（D-08）。
+    public func seal(at date: Date = .now) {
+        isDraft = false
+        updatedAt = date
+    }
+
+    public var access: LetterAccess {
+        isDraft ? .draft : .sealed(openAt: openAt)
     }
 }
 

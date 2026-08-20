@@ -81,8 +81,16 @@ public enum MergeRules {
         return merged
     }
 
-    /// 信件按 id 取并集。内容不可修改，唯一会变的是「是否已开启」——
-    /// 一旦在任一端开启过，就是已开启。
+    /// 信件按 id 取并集。
+    ///
+    /// 两类信的合并规则不同（信件文案表第 0 节）：
+    /// - **草稿**参与合并，冲突取 `updatedAt` 较晚者 —— 它还能改，和心里话一样。
+    /// - **已封存**的信 append-only：内容不可修改，唯一会变的是「是否已开启」，
+    ///   一旦在任一端开启过就是已开启。
+    ///
+    /// 关键不变量：**封存是不可逆的**。一端已封存、另一端还是草稿时，
+    /// 结果必须是已封存 —— 否则同步会把一封已经"托付出去"的信变回可编辑，
+    /// D-08 的全部重量就没了。
     public static func mergeLetters(
         local: [ExportSnapshot.LetterDTO],
         remote: [ExportSnapshot.LetterDTO]
@@ -93,6 +101,26 @@ public enum MergeRules {
                 byID[item.id] = item
                 continue
             }
+
+            // 封存不可逆：任一端已封存即为已封存。
+            if existing.isDraft != item.isDraft {
+                var sealedSide = existing.isDraft ? item : existing
+                let draftSide = existing.isDraft ? existing : item
+                if sealedSide.isOpened || draftSide.isOpened {
+                    sealedSide.isOpened = true
+                    sealedSide.openedAt = [sealedSide.openedAt, draftSide.openedAt].compactMap { $0 }.min()
+                    sealedSide.content = sealedSide.content ?? draftSide.content
+                }
+                byID[item.id] = sealedSide
+                continue
+            }
+
+            // 两端都是草稿：后写入者胜。
+            if existing.isDraft && item.isDraft {
+                byID[item.id] = item.updatedAt > existing.updatedAt ? item : existing
+                continue
+            }
+
             var merged = existing
             if item.isOpened && !existing.isOpened {
                 merged.isOpened = true
