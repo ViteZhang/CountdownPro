@@ -42,6 +42,16 @@ targets:
         product: CountdownUI
       - target: CountdownWidgets
         embed: true
+    # 显式声明 scheme 并入库。
+    # 不写的话要靠 Xcode 打开工程时"自动创建 scheme"补上 ——
+    # 于是命令行 xcodebuild 在没人开过 Xcode 的机器上会直接报 scheme not found，
+    # CI 上尤其如此。
+    scheme:
+      testTargets:
+        - package: CountdownCore
+          product: CountdownKitTests
+        - package: CountdownCore
+          product: DesignTokensTests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.countdownpro.app

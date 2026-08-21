@@ -4,3 +4,9 @@ DerivedData/
 *.xcuserdatad
 xcuserdata/
 *.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Xcode 工程由 XcodeGen 从 project.yml 生成，**不入库**。
+# .pbxproj 是一个巨大的单行机器生成文件，两个人各加一个文件就会冲突，
+# 而且冲突无法用肉眼合并。真相源是 project.yml。
+#   xcodegen generate
+*.xcodeproj/
