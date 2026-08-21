@@ -10,3 +10,6 @@ xcuserdata/
 # 而且冲突无法用肉眼合并。真相源是 project.yml。
 #   xcodegen generate
 *.xcodeproj/
+
+# 小组件的 Info.plist 同样由 XcodeGen 从 project.yml 的 info: 块生成。
+CountdownWidgets/Info.plist
