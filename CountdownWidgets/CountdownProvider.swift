@@ -17,6 +17,12 @@ struct CountdownEntry: TimelineEntry {
     }
 }
 
+/// # 隔离形态（Swift 6 + WidgetKit SDK 事实）
+/// 协议 `TimelineProvider` 整体是非隔离的（只有 completion 是 @Sendable），
+/// 全部依赖（WidgetDataSource / DayCalendar / WidgetEntryData）也都是 Sendable
+/// 值类型。因此 provider 保持 nonisolated 是既合法又零开销的形态 ——
+/// 曾尝试给类型或 witness 标 @MainActor，均触发 "crosses into main
+/// actor-isolated code" 硬错误，不要再走那条路。
 struct CountdownProvider: TimelineProvider {
 
     private let dataSource = WidgetDataSource(configuration: .shared)
@@ -26,12 +32,10 @@ struct CountdownProvider: TimelineProvider {
         .placeholder(at: .now)
     }
 
-    @MainActor
     func getSnapshot(in context: Context, completion: @escaping (CountdownEntry) -> Void) {
         completion(currentEntry())
     }
 
-    @MainActor
     func getTimeline(in context: Context, completion: @escaping (Timeline<CountdownEntry>) -> Void) {
         guard let snapshot = dataSource.snapshot() else {
             completion(Timeline(entries: [.placeholder(at: .now)], policy: .after(cal.adding(days: 1, to: .now))))
@@ -50,7 +54,6 @@ struct CountdownProvider: TimelineProvider {
         ))
     }
 
-    @MainActor
     private func currentEntry() -> CountdownEntry {
         guard let snapshot = dataSource.snapshot(),
               let first = WidgetTimelineBuilder.entries(snapshot: snapshot, from: .now, cal: cal).first

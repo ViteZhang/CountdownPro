@@ -171,7 +171,7 @@ struct ComposeLetterFlow: View {
     }
 
     private func saveDraftAndClose() {
-        try? makeService().saveDraft(trimmed, existing: draft)
+        _ = try? makeService().saveDraft(trimmed, existing: draft)
         dismiss()
     }
 

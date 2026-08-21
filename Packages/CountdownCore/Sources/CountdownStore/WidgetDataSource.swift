@@ -23,7 +23,11 @@ public struct WidgetDataSource: Sendable {
 
     /// 读取渲染所需的快照。返回 `nil` 表示用户还没走完引导（没有主考试），
     /// 此时小组件应显示占位态而不是 0 天。
-    @MainActor
+    ///
+    /// # 为什么不是 @MainActor
+    /// ModelContext 是函数内局部创建的（只读、用完即弃），不存在跨线程共享，
+    /// 不需要 MainActor。而调用方 `TimelineProvider` 的 witness 是非隔离的 ——
+    /// 这里标了 @MainActor 会把隔离冲突推给小组件那边（Swift 6 下无解）。
     public func snapshot() -> WidgetSnapshot? {
         guard let exam = primaryExam() else { return nil }
         return WidgetSnapshot(
@@ -34,7 +38,6 @@ public struct WidgetDataSource: Sendable {
         )
     }
 
-    @MainActor
     private func primaryExam() -> Exam? {
         guard let container = try? makeContainer() else { return nil }
         let context = ModelContext(container)
