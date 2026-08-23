@@ -41,11 +41,75 @@ final class StringsTests: XCTestCase {
 
     /// 资料未给的文案必须是刺眼占位符，不能被误当成成品。
     func testMissingCopyIsLoudlyMarked() {
-        XCTAssertTrue(Strings.Settings.title.hasPrefix("⟪待补文案："))
         XCTAssertTrue(Strings.ShareCard.watermark.hasPrefix("⟪待补文案："))
         XCTAssertTrue(Strings.Notifications.letterOpen.hasPrefix("⟪待补文案："))
-        // 心理支持资源绝不自拟
-        XCTAssertTrue(Strings.Settings.mentalHealthContent.hasPrefix("⟪待补文案："))
+        // 用户协议与隐私政策正文必须由律师/合规出具，**不许 AI 生成后直接上线**。
+        XCTAssertTrue(Strings.About.privacyBody.hasPrefix("⟪待补文案："))
+        XCTAssertTrue(Strings.About.termsBody.hasPrefix("⟪待补文案："))
+        XCTAssertTrue(Strings.About.icpNumber.hasPrefix("⟪待补文案："))
+    }
+
+    // MARK: - 心理支持资源
+    //
+    // 这一组断言守的不是拼写，是"不许编"。
+    // 号码写错、主办单位写错、或者写成一个好听但不存在的号码，
+    // 后果是一个真的很难熬的人打过去没人接。
+
+    func testHotlineNumbersAreTheOfficialOnes() {
+        // 12356：国家卫生健康委协调工业和信息化部设置的全国统一心理援助热线
+        XCTAssertEqual(Strings.MentalHealth.hotlineNationalNumber, "12356")
+        XCTAssertTrue(Strings.MentalHealth.hotlineNationalCaption.contains("国家卫生健康委"))
+        // 12355：共青团中央设立的青少年服务台
+        XCTAssertEqual(Strings.MentalHealth.hotlineYouthNumber, "12355")
+        XCTAssertTrue(Strings.MentalHealth.hotlineYouthCaption.contains("共青团中央"))
+    }
+
+    /// **不得声称 24 小时。**
+    /// 国家卫生健康委的要求是每个设区的市每日不少于 18 小时，各地实际时长并不统一。
+    /// 写死「24 小时」会让一个半夜打不通的人以为是自己的问题。
+    func testHotlineNeverPromisesRoundTheClock() {
+        for s in [Strings.MentalHealth.intro,
+                  Strings.MentalHealth.footnote,
+                  Strings.MentalHealth.hotlineNationalCaption,
+                  Strings.MentalHealth.hotlineYouthCaption] {
+            XCTAssertFalse(s.contains("24 小时"), s)
+            XCTAssertFalse(s.contains("24小时"), s)
+            XCTAssertFalse(s.contains("全天"), s)
+        }
+        // 打不通时给的是替代方案，不是道歉，也不是"请稍后再试"。
+        XCTAssertTrue(Strings.MentalHealth.footnote.contains("换一个试试"))
+    }
+
+    /// 页面内不做任何情绪评估、量表、问卷 —— 那是没有资质的心理筛查。
+    /// 文案层面先堵住：不出现任何提问句式。
+    func testMentalHealthPageAsksNothing() {
+        for s in [Strings.MentalHealth.intro, Strings.MentalHealth.footnote] {
+            XCTAssertFalse(s.contains("？"), s)
+            XCTAssertFalse(s.contains("?"), s)
+        }
+    }
+
+    /// 考后停止打卡的两句文案：陈述，不评价。
+    func testPostExamFreezeIsStatedNotCelebrated() {
+        let total = Strings.PostExam.frozenTotal(315)
+        XCTAssertEqual(total, "你一共来了 315 天")
+        XCTAssertEqual(Strings.PostExam.frozenCaption, "这个数字不会再变了")
+        for s in [total, Strings.PostExam.frozenCaption, Strings.PostExam.resultDay] {
+            XCTAssertFalse(s.contains("恭喜"), s)
+            XCTAssertFalse(s.contains("！"), s)
+        }
+    }
+
+    /// 删除考试必须报出具体会丢什么，且给出数字。
+    /// 只说「数据将被删除」等于没说。
+    func testDeleteExamSpellsOutWhatIsLost() {
+        let body = Strings.Exams.deleteBody(checkInDays: 128, notes: 36, letters: 3)
+        XCTAssertTrue(body.contains("128"))
+        XCTAssertTrue(body.contains("36"))
+        XCTAssertTrue(body.contains("3"))
+        // 按钮不是「确定 / 取消」——「留着」比「取消」更清楚地说明了不点会发生什么。
+        XCTAssertEqual(Strings.Exams.deleteConfirm, "删掉")
+        XCTAssertEqual(Strings.Exams.deleteCancel, "留着")
     }
 
     /// 已给定的文案不得混入占位符。

@@ -52,9 +52,9 @@ public enum DSStroke {
     /// 进度条高度：小组件小号
     public static let barWidget: Double = 5
 
-    /// 树：线稿，不填充（设计系统 1.5）
-    public static let treeMin: Double = 1.3
-    public static let treeMax: Double = 1.8
+    // 树曾经是代码画的线稿，需要 stroke 宽度（设计系统 1.5 规定 1.3–1.8）。
+    // 美术交付实心剪影 PNG 后这两个值不再有落点，一并删掉 ——
+    // 留着会让下一个人以为树还是画出来的，去调它，然后发现调了没反应。
 }
 
 /// 进度环绘制规则（设计系统 1.5 / 需求文档 5.2）。

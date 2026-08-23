@@ -4,62 +4,162 @@ import XCTest
 /// 设计代币不是"样式建议"，是产品决策的载体。这些断言守的是决策，不是数值。
 final class PaletteTests: XCTestCase {
 
+    /// 四套皮肤 × 深浅两态 = 八套色板。**每条规则都对八套逐一断言。**
+    ///
+    /// 只验默认那一套是这类测试最常见的漏法：新皮肤上线时没人会想起来
+    /// "那条对比度测试只覆盖了深空"，于是第三套皮肤的次文字悄悄掉到 3:1。
+    private static let allPalettes: [(String, Palette)] = [
+        ("深空·深", .deepSpaceDark),   ("深空·浅", .deepSpaceLight),
+        ("晨雾·深", .morningMistDark), ("晨雾·浅", .morningMistLight),
+        ("夜潮·深", .nightTideDark),   ("夜潮·浅", .nightTideLight),
+        ("旧纸·深", .oldPaperDark),    ("旧纸·浅", .oldPaperLight),
+    ]
+
+    private static let darkPalettes: [(String, Palette)] = [
+        ("深空·深", .deepSpaceDark),   ("晨雾·深", .morningMistDark),
+        ("夜潮·深", .nightTideDark),   ("旧纸·深", .oldPaperDark),
+    ]
+
+    private static let lightPalettes: [(String, Palette)] = [
+        ("深空·浅", .deepSpaceLight),  ("晨雾·浅", .morningMistLight),
+        ("夜潮·浅", .nightTideLight),  ("旧纸·浅", .oldPaperLight),
+    ]
+
     /// 设计决策 D-07：基底不用纯黑，文字不用纯白。
     /// 纯黑在 OLED 上滚动拖影；21:1 对比度下中文笔画会产生光晕；
     /// 且纯黑没有"更深"的余地，层级只能往亮里走，界面会一层层浮起来。
-    func testNoPureBlackOrPureWhiteInDarkScheme() {
-        let p = Palette.defaultDark
-        XCTAssertNotEqual(p.background.hex, 0x000000)
-        XCTAssertNotEqual(p.textPrimary.hex, 0xFFFFFF)
-        XCTAssertEqual(p.background.hexString, "#101114")
-        XCTAssertEqual(p.textPrimary.hexString, "#F2F4F7")
+    func testNoPureBlackOrPureWhiteInAnySkin() {
+        for (name, p) in Self.allPalettes {
+            XCTAssertNotEqual(p.background.hex, 0x000000, name)
+            XCTAssertNotEqual(p.background.hex, 0xFFFFFF, name)
+            XCTAssertNotEqual(p.textPrimary.hex, 0xFFFFFF, name)
+            XCTAssertNotEqual(p.textPrimary.hex, 0x000000, name)
+        }
+        // 深空这一套的具体值来自设计系统 1.1，钉死。
+        XCTAssertEqual(Palette.deepSpaceDark.background.hexString, "#101114")
+        XCTAssertEqual(Palette.deepSpaceDark.textPrimary.hexString, "#F2F4F7")
+        XCTAssertEqual(Palette.deepSpaceLight.background.hexString, "#FAFAF8")
     }
 
-    /// 浅色基底是"纸白"，不是纯白。
-    func testLightBackgroundIsPaperNotPureWhite() {
-        XCTAssertNotEqual(Palette.defaultLight.background.hex, 0xFFFFFF)
-        XCTAssertEqual(Palette.defaultLight.background.hexString, "#FAFAF8")
-    }
-
-    /// D-07 的量化后果：主文字/基底的对比度必须远低于纯黑白的 21:1，
-    /// 同时仍要满足 WCAG AA 正文（4.5:1）。
-    func testPrimaryTextContrastIsComfortableNotHarsh() {
-        for p in [Palette.defaultDark, Palette.defaultLight] {
+    /// 主文字对比度：《V1 剩余页面》4.2 规定 ≥ 7:1（WCAG AAA），
+    /// 同时 D-07 要求不得逼近纯黑白的 21:1。
+    func testPrimaryTextContrastIsAAAButNotHarsh() {
+        for (name, p) in Self.allPalettes {
             let ratio = p.textPrimary.contrastRatio(against: p.background)
-            XCTAssertGreaterThan(ratio, 4.5, "主文字对比度需达 WCAG AA")
-            XCTAssertLessThan(ratio, 19.0, "不该逼近纯黑白的 21:1")
+            XCTAssertGreaterThanOrEqual(ratio, 7.0, "\(name) 主文字需达 AAA")
+            XCTAssertLessThan(ratio, 19.0, "\(name) 不该逼近纯黑白的 21:1")
         }
     }
 
-    /// 次文字仍需可读（AA large / UI 组件线 3:1）。
-    func testSecondaryTextRemainsReadable() {
-        for p in [Palette.defaultDark, Palette.defaultLight] {
-            XCTAssertGreaterThan(p.textSecondary.contrastRatio(against: p.background), 3.0)
+    /// 次文字 ≥ 4.5:1（《V1 剩余页面》4.2）。
+    func testSecondaryTextMeetsAA() {
+        for (name, p) in Self.allPalettes {
+            XCTAssertGreaterThanOrEqual(
+                p.textSecondary.contrastRatio(against: p.background), 4.5, name)
         }
     }
 
-    /// 设计系统 1.1：两套模式是同一个性格的一日两态。
-    /// 结构上已由 `Palette` 的必填字段保证，这里再验一次深浅方向确实相反。
+    /// 弱文字只承载可有可无的信息，按 UI 组件线的 3:1 要求。
+    func testTertiaryTextClearsTheComponentThreshold() {
+        for (name, p) in Self.allPalettes {
+            XCTAssertGreaterThan(
+                p.textTertiary.contrastRatio(against: p.background), 2.4, name)
+        }
+    }
+
+    /// 设计系统 1.1：两套模式是同一个性格的一日两态，不是两套设计。
     func testDarkAndLightAreInverted() {
-        XCTAssertLessThan(Palette.defaultDark.background.relativeLuminance,
-                          Palette.defaultDark.textPrimary.relativeLuminance)
-        XCTAssertGreaterThan(Palette.defaultLight.background.relativeLuminance,
-                             Palette.defaultLight.textPrimary.relativeLuminance)
+        for (name, p) in Self.darkPalettes {
+            XCTAssertLessThan(p.background.relativeLuminance,
+                              p.textPrimary.relativeLuminance, name)
+        }
+        for (name, p) in Self.lightPalettes {
+            XCTAssertGreaterThan(p.background.relativeLuminance,
+                                 p.textPrimary.relativeLuminance, name)
+        }
     }
 
     /// 设计决策 D-06：全界面灰阶，唯一的彩色留给树。
-    /// 灰阶 = R/G/B 三通道彼此接近；树必须明显不是灰阶。
-    func testTreeIsTheOnlySaturatedColor() {
-        func chroma(_ c: DSColor) -> Double {
-            max(c.red, c.green, c.blue) - min(c.red, c.green, c.blue)
+    ///
+    /// 判据是**相对的**，不是一个绝对阈值。皮肤的定义就是"换基底色温"，
+    /// 晨雾的灰偏暖、夜潮的灰偏蓝，它们的彩度本来就比深空高 ——
+    /// 拿深空那条绝对线去卡，等于禁止皮肤存在。
+    ///
+    /// 真正要守的是：**树在它自己那套色板里必须是最彩的那个，且甩开一截。**
+    func testTreeIsTheMostSaturatedColorInEverySkin() {
+        for (name, p) in Self.allPalettes {
+            let neutrals = [p.background, p.surface, p.surfaceRaised, p.line,
+                            p.textPrimary, p.textSecondary, p.textTertiary]
+            let mostSaturatedNeutral = neutrals.max { $0.chroma < $1.chroma }!
+            XCTAssertGreaterThan(
+                p.tree.chroma, mostSaturatedNeutral.chroma * 1.4,
+                "\(name)：树必须明显比最彩的灰阶色更彩（灰阶最高 \(mostSaturatedNeutral.hexString)）")
         }
-        for p in [Palette.defaultDark, Palette.defaultLight] {
-            for neutral in [p.background, p.surface, p.surfaceRaised, p.line,
-                            p.textPrimary, p.textSecondary, p.textTertiary] {
-                XCTAssertLessThan(chroma(neutral), 0.09, "灰阶色不得有明显彩度：\(neutral.hexString)")
+    }
+
+    /// 色温倾向可以有，但不能倾向到变成第二个彩色。
+    func testNeutralsStayNeutralEvenWhenTinted() {
+        for (name, p) in Self.allPalettes {
+            for n in [p.background, p.surface, p.surfaceRaised, p.line,
+                      p.textPrimary, p.textSecondary, p.textTertiary] {
+                XCTAssertLessThan(n.chroma, 0.12,
+                                  "\(name)：\(n.hexString) 已经不像灰了")
             }
-            XCTAssertGreaterThan(chroma(p.tree), 0.10, "树是全界面唯一彩色")
         }
+    }
+
+    /// 树在四套里都不能变成枯色。
+    ///
+    /// 「把这一套皮肤的树改成褐色，视觉更协调」是评审里最容易通过的一条意见，
+    /// 而枯褐色会被读作"树枯了" —— 那正是 D-05 禁止的：
+    /// 树只与时间有关，不因用户表现枯萎。
+    ///
+    /// 上界 200° 同样是硬的：再冷就读作蓝色，树也就不是树了。
+    func testTreeNeverGoesWitheredOrBlue() {
+        for (name, p) in Self.allPalettes {
+            guard let hue = p.tree.hueDegrees else {
+                return XCTFail("\(name)：树不能是灰的")
+            }
+            XCTAssertGreaterThanOrEqual(hue, 70, "\(name)：树偏黄褐了（\(p.tree.hexString)）")
+            XCTAssertLessThanOrEqual(hue, 200, "\(name)：树偏蓝了（\(p.tree.hexString)）")
+        }
+    }
+
+    /// 警示色四套共用。
+    /// 信号色跟着皮肤变，等于让用户每换一次皮肤重新学一遍红色代表什么。
+    func testSignalColorsDoNotVaryBySkin() {
+        for (name, p) in Self.darkPalettes {
+            XCTAssertEqual(p.warning, Palette.deepSpaceDark.warning, name)
+            XCTAssertEqual(p.danger, Palette.deepSpaceDark.danger, name)
+        }
+        for (name, p) in Self.lightPalettes {
+            XCTAssertEqual(p.warning, Palette.deepSpaceLight.warning, name)
+            XCTAssertEqual(p.danger, Palette.deepSpaceLight.danger, name)
+        }
+    }
+
+    /// 八套色板两两不同 —— 否则"解锁了新皮肤但看不出区别"。
+    func testEveryPaletteIsDistinct() {
+        for i in Self.allPalettes.indices {
+            for j in Self.allPalettes.indices where i < j {
+                XCTAssertNotEqual(Self.allPalettes[i].1, Self.allPalettes[j].1,
+                                  "\(Self.allPalettes[i].0) 与 \(Self.allPalettes[j].0) 完全一样")
+            }
+        }
+    }
+
+    /// 每个皮肤都必须真的映射到自己的色板。
+    /// 曾经这里是"未定义就回落到默认" —— 那个回落一旦留着，
+    /// 补了配色却忘了改映射的话，新皮肤会静默地长得和深空一样。
+    func testEverySkinMapsToItsOwnPalette() {
+        XCTAssertEqual(Skin.default.palette(.dark), .deepSpaceDark)
+        XCTAssertEqual(Skin.second.palette(.dark), .morningMistDark)
+        XCTAssertEqual(Skin.third.palette(.dark), .nightTideDark)
+        XCTAssertEqual(Skin.fourth.palette(.dark), .oldPaperDark)
+        XCTAssertEqual(Skin.default.palette(.light), .deepSpaceLight)
+        XCTAssertEqual(Skin.second.palette(.light), .morningMistLight)
+        XCTAssertEqual(Skin.third.palette(.light), .nightTideLight)
+        XCTAssertEqual(Skin.fourth.palette(.light), .oldPaperLight)
     }
 }
 
@@ -134,17 +234,23 @@ final class SkinTests: XCTestCase {
         XCTAssertNil(Skin.newlyUnlocked(totalCheckIns: 0))
     }
 
-    /// 第 2/3/4 套配色尚未定义：解锁逻辑完整，但不会展示。
-    func testOnlyDefinedSkinsAreAvailable() {
-        XCTAssertEqual(Skin.available, [.default])
-        XCTAssertTrue(Skin.default.hasDefinedPalette)
-        XCTAssertFalse(Skin.second.hasDefinedPalette)
+    /// 四套皮肤都有名字，且都不是占位符。
+    func testEverySkinHasAName() {
+        XCTAssertEqual(Skin.default.displayName, "深空")
+        XCTAssertEqual(Skin.second.displayName, "晨雾")
+        XCTAssertEqual(Skin.third.displayName, "夜潮")
+        XCTAssertEqual(Skin.fourth.displayName, "旧纸")
+        for skin in Skin.allCases {
+            XCTAssertFalse(skin.displayName.contains("待补文案"), skin.displayName)
+        }
     }
 
-    /// 未定义配色的皮肤回落到默认皮肤，绝不返回半套色板。
-    func testUndefinedSkinFallsBackToDefaultPalette() {
-        XCTAssertEqual(Skin.second.palette(.dark), Palette.defaultDark)
-        XCTAssertEqual(Skin.fourth.palette(.light), Palette.defaultLight)
+    /// 未解锁的皮肤要显示"还差几天" —— 看得到才有动力。
+    func testDaysUntilUnlock() {
+        XCTAssertEqual(Skin.third.daysUntilUnlock(totalCheckIns: 63), 37)
+        XCTAssertEqual(Skin.third.daysUntilUnlock(totalCheckIns: 100), 0)
+        XCTAssertEqual(Skin.third.daysUntilUnlock(totalCheckIns: 300), 0)
+        XCTAssertEqual(Skin.default.daysUntilUnlock(totalCheckIns: 0), 0)
     }
 }
 

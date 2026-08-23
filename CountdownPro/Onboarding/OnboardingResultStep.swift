@@ -62,8 +62,7 @@ struct OnboardingResultStep: View {
                 .opacity(showRest ? 1 : 0)
 
             VStack(spacing: DSSpacing.md - 2) {
-                TreeView(stage: countdown.growthStage, color: palette.tree,
-                         lineWidth: DSStroke.treeMin)
+                TreeView(stage: countdown.growthStage, color: palette.tree)
                     .frame(width: 52, height: 60)
                 Text(Strings.Onboarding.treeCaption)
                     .dsFont(DSFont.caption(DSType.caption))

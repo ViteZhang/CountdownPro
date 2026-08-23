@@ -18,7 +18,13 @@ let package = Package(
         .target(name: "CountdownKit"),
         .target(name: "DesignTokens", dependencies: ["CountdownKit"]),
         .target(name: "CountdownStore", dependencies: ["CountdownKit"]),
-        .target(name: "CountdownUI", dependencies: ["CountdownKit", "DesignTokens"]),
+        // 树的七张美术资产随包分发，App 与 Widget 因此共用同一份 —— 
+        // 复制到两个 target 里迟早会更新一份忘一份。
+        .target(
+            name: "CountdownUI",
+            dependencies: ["CountdownKit", "DesignTokens"],
+            resources: [.process("Resources")]
+        ),
         .testTarget(name: "CountdownKitTests", dependencies: ["CountdownKit"]),
         .testTarget(name: "DesignTokensTests", dependencies: ["DesignTokens"]),
     ]

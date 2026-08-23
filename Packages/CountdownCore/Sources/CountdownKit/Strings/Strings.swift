@@ -478,40 +478,180 @@ public enum Strings {
         public static let exportedJSON = "已导出 JSON"
     }
 
-    // MARK: - 设置（需求文档 5.13）—— 资料完全未提供
+    // MARK: - 设置（需求文档 5.13 / 《V1 剩余页面 · 文案与规格》第二节）
 
     public enum Settings {
-        public static let title = missing("设置页标题")
-        public static let rowExams = missing("设置项·考试管理")
-        public static let rowSkins = missing("设置项·皮肤")
-        public static let rowNotifications = missing("设置项·通知开关")
-        public static let rowExport = missing("设置项·数据导出")
-        public static let rowAbout = missing("设置项·关于")
-        public static let rowPrivacy = missing("设置项·隐私政策")
-        /// 出分日的强约束：常驻但不显眼、可找到。**不做诊断、不做引导性提问。**
-        /// 热线信息必须来源权威（需求文档待决事项 5），此处绝不自行编写。
-        public static let rowMentalHealth = missing("设置项·心理支持资源")
-        public static let mentalHealthContent = missing("心理支持资源内容（需权威来源，不可自拟）")
-        public static let rowAccount = missing("设置项·账号入口（未登录态文案）")
+        public static let title = "设置"
+
+        /// 分组**不加分组标题**，用间距分隔。
+        /// 加了标题这页会显得很"系统设置"，不符合产品调性。
+        public static let rowExams = "我的考试"
+        public static let rowAppearance = "外观"
+        public static let rowFollowSystemAppearance = "跟随系统深浅色"
+        public static let alwaysDark = "始终用深色"
+        public static let alwaysLight = "始终用浅色"
+        public static let rowNotifications = "提醒"
+        public static let notificationsOn = "已开启"
+        public static let notificationsOff = "已关闭"
+        public static let rowAccount = "账号"
+        public static let accountUnbound = "未绑定"
+        public static let rowExport = "导出我的数据"
+        public static let rowMentalHealth = MentalHealth.entry
+        public static let rowAbout = "关于"
     }
 
-    // MARK: - 通知（需求文档 5.11）—— 正文资料未提供
+    // MARK: - 心理支持资源
+    //
+    // 号码与主办单位**来源为官方**，不是编的，也不许改：
+    // 12356 是国家卫生健康委协调工业和信息化部设置的全国统一心理援助热线；
+    // 12355 是共青团中央设立的青少年服务台。
+    //
+    // 不要写「24 小时」—— 国家卫生健康委的要求是每个设区的市每日不少于 18 小时，
+    // 各地实际时长并不统一，写死会变成一句骗人的话。
+
+    public enum MentalHealth {
+        public static let entry = "需要找人说说话"
+        public static let title = entry
+        public static let intro = """
+        如果最近很难熬，可以打这两个电话。
+        接电话的是受过训练的人，不是机器。
+        """
+
+        public static let hotlineNationalNumber = "12356"
+        public static let hotlineNationalCaption = "全国心理援助热线 · 国家卫生健康委"
+        public static let hotlineYouthNumber = "12355"
+        public static let hotlineYouthCaption = "青少年服务台 · 共青团中央"
+
+        public static let footnote = """
+        各地服务时间不完全一样，打不通可以换一个试试。
+        如果情况紧急，请直接拨打 120。
+        """
+    }
+
+    // MARK: - 提醒（需求文档 5.11）
 
     public enum Notifications {
-        /// 节点通知与考试当天通知共用的标题。
-        public static let title = missing("节点通知标题")
+        public static let title = "提醒"
+        /// 这句同时是承诺和差异化。它有一条测试盯着
+        /// （`NotificationPlanner.maxNonLetterNotificationsPerCycle`）。
+        public static let intro = "我们一年只会打扰你几次。"
+
+        public static let milestoneToggle = "重要的日子"
+        public static let milestoneToggleCaption = "还剩 100 天、50 天、30 天、10 天，和考试当天"
+        public static let letterToggle = "信件到期"
+        public static let letterToggleCaption = "你写的信到了该拆的那天"
+
+        /// 系统级权限被关掉时的提示，点击跳系统设置。
+        public static let systemDenied = "系统里关掉了通知权限，去打开 →"
+
+        /// 通知本身的标题与正文。资料仍未给出。
+        public static let pushTitle = missing("节点通知标题")
         public static func milestone(_ days: Int) -> String { missing("节点通知正文·还剩\(days)天") }
         public static let letterOpen = missing("信件开启日通知正文")
         public static let examDayMorning = missing("考试当天早上的祝福通知正文")
-        /// 5.11：权限请求时机为**第一次打卡之后**，且附一句说明。原型只给了这半句。
+        /// 5.11：权限请求时机为**第一次打卡之后**，且附一句说明。
         public static let permissionRationaleFragment = "我们一年只会打扰你几次"
         public static let permissionRationale = missing("通知权限请求的完整说明文案")
     }
 
-    // MARK: - 皮肤（需求文档 5.9）
+    // MARK: - 考试管理（《V1 剩余页面》第三节）
+
+    public enum Exams {
+        public static let listTitle = "我的考试"
+        public static let primaryBadge = "首页显示"
+        public static let add = "＋ 添加一场考试"
+        public static let listFootnote = "首页只显示一场考试，长按可以换。"
+
+        /// 「还剩 187 天 · 已走过 823 天」
+        public static func rowCaption(remaining: Int, passed: Int) -> String {
+            "还剩 \(remaining) 天 · 已走过 \(passed) 天"
+        }
+
+        public static let addTitle = "添加考试"
+        public static let editTitle = "编辑考试"
+        public static let fieldName = "考试名称"
+        public static let fieldNamePlaceholder = "高考"
+        public static let fieldTargetDate = "考试日期"
+        public static let fieldStartDate = "从哪天开始算起"
+        public static let fieldStartDateCaption = "这决定了「已走过多少天」"
+        public static let fieldProvince = "省份（选填）"
+        public static let fieldProvinceCaption = "用于考后的出分和填报时间"
+        public static let save = "保存"
+        public static let setPrimary = "在首页显示这一场"
+
+        /// 改考试日期会牵动三样东西，必须明确告知。
+        /// 只调整**预设节点**（100 天 / 50 天 / 考前一晚 / 出分日）的信，自定义日期的信不动。
+        public static func targetDateChanged(lettersShifted: Int) -> String {
+            lettersShifted == 0
+                ? "进度和天数都重算了。"
+                : "进度和天数都重算了。\n有 \(lettersShifted) 封信的开启日期也跟着调整了。"
+        }
+
+        public static func startDateChanged(passed: Int) -> String {
+            "「已走过」变成了 \(passed) 天。"
+        }
+
+        public static let deleteTitle = "删掉这场考试？"
+        /// 删除是重操作，**必须列出会连带删掉什么，且给出具体数字**。
+        public static func deleteBody(checkInDays: Int, notes: Int, letters: Int) -> String {
+            "这场考试下的 \(checkInDays) 天打卡记录、\(notes) 句心里话和 \(letters) 封信都会一起删掉。"
+        }
+        public static let deleteConfirm = "删掉"
+        public static let deleteCancel = "留着"
+        /// 删除唯一一场考试时**阻止操作**并给出替代方案 ——
+        /// 不允许 App 进入"没有任何考试"的空状态。
+        public static let deleteLastBlocked = "至少要留一场。可以直接改日期，不用删掉重建。"
+        public static func primaryHandedOver(to name: String) -> String {
+            "首页换成了\(name)"
+        }
+    }
+
+    // MARK: - 外观 / 皮肤（需求文档 5.9 / 《V1 剩余页面》第四节）
 
     public enum Skins {
-        public static let unlockToast = missing("皮肤解锁提示文案")
+        public static let title = "外观"
+        public static let sectionTitle = "配色"
+
+        /// 四套皮肤的名字。**皮肤不是换主题色，是换基底色温** ——
+        /// 名字也照着这个来：深空冷、晨雾暖、夜潮偏蓝、旧纸偏棕。
+        public static let deepSpace = "深空"
+        public static let morningMist = "晨雾"
+        public static let nightTide = "夜潮"
+        public static let oldPaper = "旧纸"
+
+        /// 「累计 100 天解锁 · 还差 37 天」
+        public static func lockedCaption(unlockAt: Int, remaining: Int) -> String {
+            "累计 \(unlockAt) 天解锁 · 还差 \(remaining) 天"
+        }
+
+        /// 解锁只给一次轻量 Toast，**不做弹窗打断**。
+        public static func unlockToast(_ name: String) -> String { "「\(name)」可以用了" }
+    }
+
+    // MARK: - 关于（《V1 剩余页面》第五节）
+
+    public enum About {
+        public static let title = "关于"
+        /// 「v1.0.0（1）」
+        public static func version(_ marketing: String, _ build: String) -> String {
+            "v\(marketing)（\(build)）"
+        }
+
+        public static let termsOfService = "用户协议"
+        public static let privacyPolicy = "隐私政策"
+        /// 这三项在应用商店审核和监管抽查中会被专门检查，**缺失会导致下架或整改**。
+        public static let personalInfoCollected = "个人信息收集清单"
+        public static let thirdPartySharing = "第三方信息共享清单"
+        public static let feedback = "给我们提意见"
+
+        /// 正文必须由律师或合规顾问出具。**不许 AI 生成后直接上线。**
+        public static let termsBody = missing("用户协议正文（须律师/合规出具，不可自拟）")
+        public static let privacyBody = missing("隐私政策正文（须律师/合规出具，不可自拟）")
+        public static let personalInfoBody = missing("个人信息收集清单正文")
+        public static let thirdPartyBody = missing("第三方信息共享清单正文")
+        public static let feedbackContact = missing("意见反馈联系方式")
+        /// App 内需可查见，通常放在关于页底部，可跳工信部查询。
+        public static let icpNumber = missing("ICP 备案号")
     }
 
     // MARK: - 小组件引导（需求文档 5.10）
@@ -534,11 +674,39 @@ public enum Strings {
         public static let widgetDescription = missing("小组件描述（添加面板里的说明）")
     }
 
-    // MARK: - 考后接力（需求文档 5.12）—— 文案资料未提供
+    // MARK: - 考后接力（需求文档 5.12 / 《V1 剩余页面》第六节）
+    //
+    // 每一句都必须经得起"考砸的人看到"这一关。
+    // 出分日**不使用「恭喜」** —— 你不知道屏幕那头是什么情绪。
 
     public enum PostExam {
-        public static let homeTitle = missing("考后态首页文案")
-        /// 5.12 强约束：出分日文案保持中性，**不使用「恭喜」**。
-        public static let resultDayNotice = missing("出分日文案（中性，禁用「恭喜」）")
+        /// 考试当天中心大字。
+        public static let examDayBigWord = "今天"
+        public static func examDayCaption(totalDays: Int) -> String {
+            "你已经走过 \(totalDays) 天"
+        }
+
+        /// 三个等待阶段的副文案。大字是天数本身，由 `CountdownView` 渲染。
+        public static let awaitingResultCaption = "天后出分"
+        public static let applicationCaption = "天后截止填报"
+        public static let awaitingSchoolCaption = "天后开学"
+
+        public static func examEnded(daysToResult: Int) -> String {
+            "考完了。\n下一件事是出分，还有 \(daysToResult) 天。"
+        }
+        /// 出分日当天。中性，**不带任何祝贺或安慰的预设**。
+        public static let resultDay = "今天出分。"
+        public static func applicationOpened(daysLeft: Int) -> String {
+            "可以填志愿了，\(daysLeft) 天后截止。"
+        }
+        public static func schoolCountdownStarted(days: Int) -> String {
+            "还有 \(days) 天开学。"
+        }
+
+        /// 考后**停止打卡**，累计数字冻结并永久保留。
+        /// 打卡的意义是"陪你走完这段路"，路走完了就该停 ——
+        /// 继续打卡会让这个动作失去含义。
+        public static func frozenTotal(_ days: Int) -> String { "你一共来了 \(days) 天" }
+        public static let frozenCaption = "这个数字不会再变了"
     }
 }

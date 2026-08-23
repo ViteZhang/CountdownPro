@@ -26,6 +26,28 @@ public struct DSColor: Equatable, Hashable, Sendable {
         return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
     }
 
+    /// 彩度：RGB 三通道的极差。0 = 纯灰。
+    ///
+    /// 用它而不是 HSL 的饱和度：接近白的颜色（如 `#FFFDF8`）HSL 饱和度会算出 1.0，
+    /// 但它看上去就是白的。判断"这是不是灰阶"时那个数字会骗人。
+    public var chroma: Double {
+        max(red, green, blue) - min(red, green, blue)
+    }
+
+    /// 色相（0–360°）。灰阶色返回 nil —— 灰没有色相，硬给一个值会让断言变得毫无意义。
+    public var hueDegrees: Double? {
+        let hi = max(red, green, blue), lo = min(red, green, blue)
+        let d = hi - lo
+        guard d > 0 else { return nil }
+        let h: Double
+        switch hi {
+        case red:   h = 60 * ((green - blue) / d).truncatingRemainder(dividingBy: 6)
+        case green: h = 60 * ((blue - red) / d + 2)
+        default:    h = 60 * ((red - green) / d + 4)
+        }
+        return h < 0 ? h + 360 : h
+    }
+
     public func contrastRatio(against other: DSColor) -> Double {
         let a = relativeLuminance, b = other.relativeLuminance
         let (hi, lo) = a > b ? (a, b) : (b, a)

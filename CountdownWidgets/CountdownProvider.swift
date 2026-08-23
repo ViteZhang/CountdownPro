@@ -17,6 +17,11 @@ struct CountdownEntry: TimelineEntry {
     }
 }
 
+/// # 为什么这里一个 `@MainActor` 都没有
+/// `TimelineProvider` 的三个方法都是 nonisolated 的。给任意一个加上 `@MainActor`，
+/// Swift 6 严格并发就会判定「协议遵循跨越主 actor 边界」并报错。
+/// 小组件本来也不需要主线程：数据全部来自 App Group 内的只读 store，
+/// 读完立刻转成 `Sendable` 的值类型。
 struct CountdownProvider: TimelineProvider {
 
     private let dataSource = WidgetDataSource(configuration: .shared)
@@ -26,12 +31,10 @@ struct CountdownProvider: TimelineProvider {
         .placeholder(at: .now)
     }
 
-    @MainActor
     func getSnapshot(in context: Context, completion: @escaping (CountdownEntry) -> Void) {
         completion(currentEntry())
     }
 
-    @MainActor
     func getTimeline(in context: Context, completion: @escaping (Timeline<CountdownEntry>) -> Void) {
         guard let snapshot = dataSource.snapshot() else {
             completion(Timeline(entries: [.placeholder(at: .now)], policy: .after(cal.adding(days: 1, to: .now))))
@@ -50,7 +53,6 @@ struct CountdownProvider: TimelineProvider {
         ))
     }
 
-    @MainActor
     private func currentEntry() -> CountdownEntry {
         guard let snapshot = dataSource.snapshot(),
               let first = WidgetTimelineBuilder.entries(snapshot: snapshot, from: .now, cal: cal).first

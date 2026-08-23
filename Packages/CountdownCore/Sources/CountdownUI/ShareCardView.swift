@@ -117,9 +117,7 @@ public struct ShareCardView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: DSSpacing.sm + 1) {
             if content.showsBloomingTree {
-                // 设计系统 1.5：线稿是常态，**唯一例外是归零卡上的树用实心** ——
-                // 终局才允许"完成"的实感。
-                TreeView(stage: .blooming, color: palette.tree, filled: true)
+                TreeView(stage: .blooming, color: palette.tree)
                     .frame(width: 34, height: 39)
             }
 
