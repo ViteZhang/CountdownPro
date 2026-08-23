@@ -5,8 +5,11 @@ import DesignTokens
 
 /// 分享卡预览与导出（需求文档 5.8）。
 ///
-/// 用户可随时在首页右上角手动生成任意类型卡片；
-/// 节点日则由 `MilestonePromptView` 主动递卡 —— **用户不会主动想到分享。**
+/// 用户可随时在首页右上角手动生成任意类型卡片；节点日则由 `MilestonePromptView`
+/// 主动递卡 —— **用户不会主动想到分享。**
+///
+/// 两个出口（分享 / 保存到相册）统一在 `ShareCardActions` 里，
+/// 全屏递卡走的是同一个组件：两处各写一遍，迟早会有一处只剩保存。
 struct ShareCardSheet: View {
 
     let cards: [ShareCardKind: ShareCardContent]
@@ -16,6 +19,8 @@ struct ShareCardSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var kind: ShareCardKind
     @State private var toast: String?
+
+    private let cal = DayCalendar.current
 
     init(cards: [ShareCardKind: ShareCardContent], palette: Palette,
          initialKind: ShareCardKind = .milestone) {
@@ -52,18 +57,15 @@ struct ShareCardSheet: View {
                 if let content = cards[kind] {
                     ShareCardView(content: content, palette: palette)
                         .clipShape(RoundedRectangle(cornerRadius: DSRadius.card - 1))
-                }
 
-                Button { save() } label: {
-                    Text(Strings.ShareCard.saveImage)
-                        .dsFont(DSFont.body(DSType.body))
-                        .foregroundStyle(palette.background.color)
-                        .padding(.horizontal, DSSpacing.xl)
-                        .padding(.vertical, DSSpacing.md - 1)
-                        .background(palette.textPrimary.color, in: Capsule())
+                    ShareCardActions(
+                        content: content,
+                        palette: palette,
+                        dateText: DateDisplay(cal: cal).dotted(.now),
+                        onToast: { toast = $0 }
+                    )
+                    .padding(.top, DSSpacing.lg)
                 }
-                .buttonStyle(.plain)
-                .padding(.top, DSSpacing.lg)
 
                 Text(Strings.ShareCard.noQRCodeHint)
                     .dsFont(DSFont.caption(DSType.captionSmall))
@@ -107,31 +109,18 @@ struct ShareCardSheet: View {
         }
     }
 
-    private func save() {
-        guard let content = cards[kind],
-              let image = ShareCardExporter.render(content: content, palette: palette)
-        else { return }
-
-        Task {
-            switch await PhotoSaver.save(image) {
-            case .saved:
-                toast = Strings.ShareCard.savedToAlbum
-            case .denied, .failed:
-                // 文案规范：错误说明发生了什么 + 怎么修，不道歉。资料未给这两句。
-                toast = Strings.missing("保存图片失败 / 无相册权限的提示文案")
-            }
-        }
-    }
-
     @ViewBuilder
     private var toastView: some View {
         if let toast {
             Text(toast)
                 .dsFont(DSFont.caption(12.5))
                 .foregroundStyle(palette.textPrimary.color)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, DSSpacing.lg - 4)
                 .padding(.vertical, DSSpacing.sm + 2)
-                .background(palette.surfaceRaised.color, in: Capsule())
+                .background(palette.surfaceRaised.color,
+                            in: RoundedRectangle(cornerRadius: DSRadius.card - 1))
+                .padding(.horizontal, DSSpacing.pageHorizontalWide)
                 .padding(.top, DSSpacing.xl + 10)
                 .task {
                     try? await Task.sleep(for: .seconds(DSMotion.toast.seconds))

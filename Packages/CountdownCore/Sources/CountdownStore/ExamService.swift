@@ -151,14 +151,26 @@ public struct ExamService {
     ///
     /// 删除唯一一场考试时**阻止操作** —— 不允许 App 进入没有任何考试的空状态。
     /// 那个状态下首页无从渲染，而用户真正想做的多半是改日期，不是重建。
+    ///
+    /// # 已知缺口：考试与信件的墓碑还没做
+    /// 这里只给心里话立墓碑。考试本身和它的信在多设备同步时仍可能被服务端那份带回来。
+    /// 没有顺手补上，是因为信的合并规则里"封存不可逆"和"删除"要一起想清楚 ——
+    /// 一封已封存的信被删掉之后又同步回来，跟一句心里话回来不是同一个量级的问题。
+    /// `DeletionDTO.Kind` 里已经留了 `.exam`，格式不用再改一次。
     @discardableResult
     public func delete(_ exam: Exam) -> DeletionOutcome {
         let all = allExams()
         guard all.count > 1 else { return .blockedLastExam }
 
         let wasPrimary = exam.isPrimary
+        let now = Date.now
         for item in checkIns(of: exam) { context.delete(item) }
-        for item in notes(of: exam) { context.delete(item) }
+        for item in notes(of: exam) {
+            // 心里话跟着考试一起删时，墓碑一样要立 —— 合并规则不区分它是
+            // 被单独删掉的还是被连带删掉的，少了墓碑照样会长回来。
+            context.insert(Deletion(recordID: item.id, kind: .note, deletedAt: now))
+            context.delete(item)
+        }
         for item in letters(of: exam) { context.delete(item) }
         context.delete(exam)
 

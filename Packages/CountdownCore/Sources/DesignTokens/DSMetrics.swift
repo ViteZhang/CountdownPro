@@ -58,6 +58,12 @@ public enum DSStroke {
 }
 
 /// 进度环绘制规则（设计系统 1.5 / 需求文档 5.2）。
+/// 不透明度。视图层禁止字面量，禁用态这类反复出现的值必须有名字。
+public enum DSOpacity {
+    /// 禁用态。0.3 是引导页与账号页早就在用的值，这里只是把它收进代币层。
+    public static let disabled: Double = 0.3
+}
+
 public enum DSRing {
     /// 端点 round
     public static let roundCap = true

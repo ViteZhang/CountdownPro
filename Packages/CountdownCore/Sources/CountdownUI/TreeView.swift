@@ -4,6 +4,14 @@ import DesignTokens
 #if canImport(SwiftUI)
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+private typealias TreePlatformImage = UIImage
+#elseif canImport(AppKit)
+import AppKit
+private typealias TreePlatformImage = NSImage
+#endif
+
 /// 成长物（需求文档 5.4）。
 ///
 /// # 这是全产品唯一的美术资产
@@ -36,12 +44,64 @@ public struct TreeView: View {
     }
 
     public var body: some View {
-        Image(stage.assetName, bundle: .module)
-            .renderingMode(.template)
-            .resizable()
-            .scaledToFit()
-            .foregroundStyle(color.color)
-            .accessibilityHidden(true)
+        // 取不到图时给一个占位方框，**不是 EmptyView**：
+        // 空视图会让首页看起来"本来就没有树"，正是这个 bug 最初活下来的原因。
+        if let image = TreeAsset.image(for: stage) {
+            image
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(color.color)
+                .accessibilityHidden(true)
+        } else {
+            Rectangle()
+                .strokeBorder(color.color, lineWidth: DSStroke.hairline)
+                .aspectRatio(1, contentMode: .fit)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// 树的图片从包资源里读出来。
+///
+/// # 为什么不用 `Image(name, bundle: .module)`
+/// 按名字查找会依次问资产目录和散装文件，任何一环没命中都**静默返回一张空图** ——
+/// 不崩、不报错、不打日志，界面上只是少了一棵树。这个失败模式害我们查过一次，
+/// 所以这里改成按确定路径读文件：命中不了就是命中不了，DEBUG 下直接断言。
+///
+/// 路径的确定性来自 `Package.swift` 里的 `.copy("Resources/Tree")`。
+/// 仍然保留一次无子目录的兜底 —— Xcode 集成 SPM 时的拷贝行为和命令行不完全一致，
+/// 而这里多试一次的代价只有一次 `url(forResource:)`。
+enum TreeAsset {
+
+    /// 小组件一条 timeline 要渲染 7 个 entry，首页每次重绘也会走这里，
+    /// 每次都解一遍 PNG 是浪费。视图 body 在主 actor 上，缓存跟着它走。
+    @MainActor private static var cache: [GrowthStage: Image] = [:]
+
+    @MainActor static func image(for stage: GrowthStage) -> Image? {
+        if let hit = cache[stage] { return hit }
+        guard let made = load(stage.assetName) else {
+            assertionFailure("树的资产读不出来：Tree/\(stage.assetName).png 不在 CountdownUI 的资源包里")
+            return nil
+        }
+        cache[stage] = made
+        return made
+    }
+
+    private static func load(_ name: String) -> Image? {
+        let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Tree")
+            ?? Bundle.module.url(forResource: name, withExtension: "png")
+        guard let url,
+              let data = try? Data(contentsOf: url),
+              let platform = TreePlatformImage(data: data)
+        else { return nil }
+        #if canImport(UIKit)
+        return Image(uiImage: platform)
+        #elseif canImport(AppKit)
+        return Image(nsImage: platform)
+        #else
+        return nil
+        #endif
     }
 }
 
@@ -52,6 +112,8 @@ extension GrowthStage {
     /// `blooming`），文件名是美术交付时的命名（`branch` / `leaf` / `bud` / `bloom`）。
     /// 让其中任何一边去将就另一边，都会在下一次交付时重新错位一遍，
     /// 不如把这层映射显式写出来 —— `switch` 是穷尽的，加一个阶段就必须来这里补一行。
+    ///
+    /// `Scripts/check-tree-assets.sh` 拿这份映射去核对文件是否真的存在。
     public var assetName: String {
         switch self {
         case .seed:      return "seed"

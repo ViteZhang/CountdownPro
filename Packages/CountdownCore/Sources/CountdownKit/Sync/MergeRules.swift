@@ -35,10 +35,21 @@ public enum MergeRules {
         return byDate.values.sorted { $0.date < $1.date }
     }
 
-    /// 心里话按 id 合并，冲突取 `updatedAt` 较晚者。
+    /// 心里话按 id 合并，冲突取 `updatedAt` 较晚者，再扣掉墓碑里点名的那些。
+    ///
+    /// # 墓碑为什么必须参与合并
+    /// 这个函数本身只会让数据变多 —— 两端取并集，同 id 取较新。
+    /// 没有墓碑时，用户在手机上删掉一句心里话，平板上那份还在，
+    /// 下一次同步它就原样回来了，而用户已经以为它没了。
+    /// **一个会自己撤销的删除比没有删除更糟。**
+    ///
+    /// 墓碑不是无条件生效：只有 `deletedAt >= updatedAt` 才算数。
+    /// 一端删了、另一端在那之后又改过同一句，说明后者是更新的意图，内容留下。
+    /// 这跟本文件其他地方的"后写入者胜"是同一条规则，删除不享受特权。
     public static func mergeNotes(
         local: [ExportSnapshot.NoteDTO],
-        remote: [ExportSnapshot.NoteDTO]
+        remote: [ExportSnapshot.NoteDTO],
+        deletions: [ExportSnapshot.DeletionDTO] = []
     ) -> [ExportSnapshot.NoteDTO] {
         var byID: [String: ExportSnapshot.NoteDTO] = [:]
         for item in local + remote {
@@ -48,7 +59,35 @@ public enum MergeRules {
                 byID[item.id] = item
             }
         }
+
+        var tombstoned: [String: Date] = [:]
+        for d in deletions where d.kind == .note {
+            tombstoned[d.id] = max(tombstoned[d.id] ?? d.deletedAt, d.deletedAt)
+        }
+        for (id, deletedAt) in tombstoned {
+            if let note = byID[id], deletedAt >= note.updatedAt {
+                byID.removeValue(forKey: id)
+            }
+        }
+
         return byID.values.sorted { ($0.date, $0.createdAt) < ($1.date, $1.createdAt) }
+    }
+
+    /// 墓碑取并集，同 id 保留最晚的一次删除。
+    ///
+    /// 墓碑**不会被"复活"抵消掉**：即使某端后来又改过那条记录、内容因此留了下来，
+    /// 墓碑本身仍然留在快照里。丢掉它，第三台设备就会重新把这条记录带回来。
+    public static func mergeDeletions(
+        local: [ExportSnapshot.DeletionDTO],
+        remote: [ExportSnapshot.DeletionDTO]
+    ) -> [ExportSnapshot.DeletionDTO] {
+        var byKey: [String: ExportSnapshot.DeletionDTO] = [:]
+        for item in local + remote {
+            let key = "\(item.kind.rawValue):\(item.id)"
+            if let existing = byKey[key], existing.deletedAt >= item.deletedAt { continue }
+            byKey[key] = item
+        }
+        return byKey.values.sorted { $0.deletedAt < $1.deletedAt }
     }
 
     /// 考试按 id 合并，冲突取 `updatedAt` 较晚者。
@@ -137,12 +176,14 @@ public enum MergeRules {
     }
 
     public static func merge(local: ExportSnapshot, remote: ExportSnapshot, now: Date) -> ExportSnapshot {
-        ExportSnapshot(
+        let deletions = mergeDeletions(local: local.deletions, remote: remote.deletions)
+        return ExportSnapshot(
             exportedAt: now,
             exams: mergeExams(local: local.exams, remote: remote.exams),
             checkIns: mergeCheckIns(local: local.checkIns, remote: remote.checkIns),
-            notes: mergeNotes(local: local.notes, remote: remote.notes),
-            letters: mergeLetters(local: local.letters, remote: remote.letters)
+            notes: mergeNotes(local: local.notes, remote: remote.notes, deletions: deletions),
+            letters: mergeLetters(local: local.letters, remote: remote.letters),
+            deletions: deletions
         )
     }
 }

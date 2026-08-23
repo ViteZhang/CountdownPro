@@ -17,6 +17,8 @@ public struct ExportSnapshot: Codable, Equatable, Sendable {
     public var checkIns: [CheckInDTO]
     public var notes: [NoteDTO]
     public var letters: [LetterDTO]
+    /// 墓碑：本地删掉过什么。见 `DeletionDTO`。
+    public var deletions: [DeletionDTO]
 
     public init(
         schemaVersion: Int = ExportSnapshot.currentSchemaVersion,
@@ -24,7 +26,8 @@ public struct ExportSnapshot: Codable, Equatable, Sendable {
         exams: [ExamDTO],
         checkIns: [CheckInDTO],
         notes: [NoteDTO],
-        letters: [LetterDTO]
+        letters: [LetterDTO],
+        deletions: [DeletionDTO] = []
     ) {
         self.schemaVersion = schemaVersion
         self.exportedAt = exportedAt
@@ -32,6 +35,52 @@ public struct ExportSnapshot: Codable, Equatable, Sendable {
         self.checkIns = checkIns
         self.notes = notes
         self.letters = letters
+        self.deletions = deletions
+    }
+
+    /// 手写 `init(from:)` 只为了一件事：`deletions` 缺失时补成空数组。
+    ///
+    /// 合成的 Codable 会因为缺 key 直接抛错，于是所有**这个字段出现之前**导出的文件
+    /// 都会变成不可导入 —— 而"导出文件要跨版本读"正是这份格式存在的理由。
+    /// 加字段不改 `schemaVersion`：旧版本读到多出来的 key 会忽略，双向都兼容。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        exportedAt = try c.decode(Date.self, forKey: .exportedAt)
+        exams = try c.decode([ExamDTO].self, forKey: .exams)
+        checkIns = try c.decode([CheckInDTO].self, forKey: .checkIns)
+        notes = try c.decode([NoteDTO].self, forKey: .notes)
+        letters = try c.decode([LetterDTO].self, forKey: .letters)
+        deletions = try c.decodeIfPresent([DeletionDTO].self, forKey: .deletions) ?? []
+    }
+
+    /// 一条删除记录。
+    ///
+    /// # 为什么删除也要同步
+    /// 合并规则对心里话取的是"按 id 合并、后写入者胜"，对打卡取的是并集 ——
+    /// 两条规则都**只会让数据变多**。没有墓碑的话，本地删掉一句心里话，
+    /// 下一次同步服务端那份又原样长回来，而用户已经以为它没了。
+    /// 一个会自己撤销的删除比没有删除更糟。
+    ///
+    /// 墓碑只记 id 和时间，**不记内容** —— 它是"这条没了"的证据，
+    /// 不是被删内容的副本。
+    ///
+    /// 注：V1 不清理墓碑。它每条只有几十字节，而清理需要知道"所有设备都同步过了"，
+    /// 那是一个比它要解决的问题大得多的机制。
+    public struct DeletionDTO: Codable, Equatable, Sendable, Identifiable {
+        public enum Kind: String, Codable, Equatable, Sendable {
+            case note
+            /// 考试删除目前**不写墓碑**（见 `ExamService.delete` 的注释）。
+            /// 这个 case 先占好位置，免得将来补上时要动一次数据格式。
+            case exam
+        }
+        public var id: String
+        public var kind: Kind
+        public var deletedAt: Date
+
+        public init(id: String, kind: Kind, deletedAt: Date) {
+            self.id = id; self.kind = kind; self.deletedAt = deletedAt
+        }
     }
 
     public struct ExamDTO: Codable, Equatable, Sendable, Identifiable {

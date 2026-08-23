@@ -11,7 +11,7 @@ struct LogView: View {
     let exam: Exam
 
     @Environment(\.modelContext) private var context
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     @Query(sort: \CheckIn.date) private var checkIns: [CheckIn]
     @Query(sort: [SortDescriptor(\Note.date, order: .reverse),
@@ -20,12 +20,16 @@ struct LogView: View {
     @State private var showingCalendar = true
     @State private var anchor = Date()
     @State private var toast: String?
+    @State private var pendingBackfill: CalendarMonth.Day?
+    @State private var pendingDelete: Note?
+    /// 长按 →「做成卡片」。5.8.1 把记录页长按列为心里话卡的入口之一，
+    /// 之前这句文案定义了却没有任何地方用到 —— 入口是缺的。
+    @State private var cardForNote: ShareCardContent?
 
     private let cal = DayCalendar.current
     private var display: DateDisplay { DateDisplay(cal: cal) }
-    private var palette: Palette {
-        Theme(skin: .default, scheme: colorScheme == .dark ? .dark : .light).palette
-    }
+    /// 皮肤走环境。这里曾经写死 `.default` —— 于是换了皮肤，记录页是唯一不跟着变的一页。
+    private var palette: Palette { theme.palette }
 
     private var countdown: Countdown {
         CountdownEngine(cal: cal).countdown(
@@ -48,6 +52,74 @@ struct LogView: View {
         .padding(.horizontal, DSSpacing.pageHorizontal)
         .background(palette.background.color.ignoresSafeArea())
         .overlay(alignment: .top) { toastView }
+        .confirmationDialog(
+            pendingBackfill.map { Strings.Log.backfillConfirmTitle(display.short($0.date)) } ?? "",
+            isPresented: backfillDialogBinding, titleVisibility: .visible
+        ) {
+            Button(Strings.Log.backfillConfirmAction) {
+                if let day = pendingBackfill { backfill(day) }
+                pendingBackfill = nil
+            }
+            Button(Strings.Common.cancel, role: .cancel) { pendingBackfill = nil }
+        } message: {
+            Text(Strings.Log.backfillConfirmBody)
+        }
+        .sheet(item: cardBinding) { box in
+            ShareCardSheet(cards: [.note: box.content], palette: palette, initialKind: .note)
+        }
+        .confirmationDialog(
+            Strings.Log.deleteNoteTitle,
+            isPresented: deleteDialogBinding, titleVisibility: .visible
+        ) {
+            Button(Strings.Log.deleteNoteConfirm, role: .destructive) {
+                if let note = pendingDelete {
+                    CheckInService(context: context, cal: cal).deleteNote(note)
+                }
+                pendingDelete = nil
+            }
+            Button(Strings.Log.deleteNoteCancel, role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text(Strings.Log.deleteNoteBody)
+        }
+    }
+
+    private var backfillDialogBinding: Binding<Bool> {
+        Binding(get: { pendingBackfill != nil }, set: { if !$0 { pendingBackfill = nil } })
+    }
+
+    private var deleteDialogBinding: Binding<Bool> {
+        Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
+    }
+
+    /// `sheet(item:)` 要一个 Identifiable 包装。
+    private struct CardBox: Identifiable {
+        let id = UUID()
+        let content: ShareCardContent
+    }
+
+    private var cardBinding: Binding<CardBox?> {
+        Binding(get: { cardForNote.map(CardBox.init(content:)) },
+                set: { if $0 == nil { cardForNote = nil } })
+    }
+
+    /// 心里话卡。
+    ///
+    /// 全部数字取**那句话写下的那天**，不是今天：时间线上可以给三个月前的一句话做卡，
+    /// 用今天的天数配那天的话，卡上就是一句对不上的记录。
+    ///
+    /// `censusDisplay` 传 nil：同考人数只有首页在拉，记录页手里没有。
+    /// 与其为了这一行补一次请求，不如整行不出现 —— D-09 的规则本来就是
+    /// 「拿不到就整块隐藏」，而分享出去的图更不能带一个来路不明的数字。
+    private func makeCard(for note: Note) -> ShareCardContent {
+        let day = cal.startOfDay(note.date)
+        return ShareCardBuilder(cal: cal).note(
+            content: note.content,
+            date: note.date,
+            nthCheckInDay: checkIns.filter { $0.date <= day }.count,
+            countdown: CountdownEngine(cal: cal).countdown(
+                startDate: exam.startDate, targetDate: exam.targetDate, today: note.date),
+            censusDisplay: nil
+        )
     }
 
     private var header: some View {
@@ -185,8 +257,11 @@ struct LogView: View {
     }
 
     private func dayCell(_ day: CalendarMonth.Day) -> some View {
+        // 补记走二次确认。今天的打卡是"点击即完成、零门槛"（5.3），
+        // 但那是一个每天都做、点错了明天还能再点的动作；
+        // 日历格子只有 30 多像素见方，点错的是**哪一天**，而记上之后没有撤销。
         Button {
-            backfill(day)
+            pendingBackfill = day
         } label: {
             ZStack {
                 Circle().fill(cellFill(day))
@@ -224,7 +299,7 @@ struct LogView: View {
     private func backfill(_ day: CalendarMonth.Day) {
         let service = CheckInService(context: context, cal: cal)
         switch service.backfill(date: day.date, examID: exam.id) {
-        case .recorded:              toast = Strings.Log.backfillDone
+        case .recorded:              toast = Strings.Log.backfillDone(display.short(day.date))
         case .alreadyRecorded:       break
         case .outsideBackfillWindow: toast = Strings.Log.backfillOutOfWindow
         }
@@ -259,7 +334,13 @@ struct LogView: View {
                     noteRow(note)
                 }
             }
-            .padding(.bottom, DSSpacing.lg)
+            // 长按没有任何视觉提示，不说一句就等于没做这个功能。
+            Text(Strings.Log.noteActionHint)
+                .dsFont(DSFont.caption(DSType.captionSmall))
+                .foregroundStyle(palette.textTertiary.color)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, DSSpacing.md)
+                .padding(.bottom, DSSpacing.lg)
         }
     }
 
@@ -285,17 +366,27 @@ struct LogView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(palette.line.color).frame(height: DSStroke.hairline)
         }
+        // 两个动作都藏在长按里：时间线是用来读的，不是用来操作的，
+        // 每行挂一排按钮会把"自己写的话"变成一份待办清单。
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button(Strings.Log.makeCard) { cardForNote = makeCard(for: note) }
+            Button(Strings.Log.deleteNoteConfirm, role: .destructive) { pendingDelete = note }
+        }
     }
 
     @ViewBuilder
     private var toastView: some View {
         if let toast {
+            // 超窗那句要把"累计不会因此减少"说完整，一行放不下。
             Text(toast)
                 .dsFont(DSFont.caption(12.5))
                 .foregroundStyle(palette.textPrimary.color)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, DSSpacing.lg - 4)
                 .padding(.vertical, DSSpacing.sm + 2)
-                .background(palette.surfaceRaised.color, in: Capsule())
+                .background(palette.surfaceRaised.color,
+                            in: RoundedRectangle(cornerRadius: DSRadius.card - 1))
                 .task {
                     try? await Task.sleep(for: .seconds(DSMotion.toast.seconds))
                     self.toast = nil

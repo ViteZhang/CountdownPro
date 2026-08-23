@@ -150,3 +150,102 @@ final class MergeRulesTests: XCTestCase {
         XCTAssertEqual(ab.exams.count, ba.exams.count)
     }
 }
+
+/// 删除必须能同步出去。
+///
+/// 合并规则本身只会让数据变多（心里话按 id 取较新，打卡取并集）。
+/// 没有墓碑时，本地删掉的一句心里话会在下一次同步时从服务端原样长回来，
+/// 而用户已经以为它没了 —— **一个会自己撤销的删除比没有删除更糟**。
+final class DeletionMergeTests: XCTestCase {
+
+    private let cal = DayCalendar.fixed()
+
+    private func note(_ id: String, updated: Date) -> ExportSnapshot.NoteDTO {
+        ExportSnapshot.NoteDTO(id: id, date: cal.day(2026, 12, 1), content: "在",
+                               createdAt: cal.day(2026, 12, 1), updatedAt: updated)
+    }
+
+    private func tomb(_ id: String, at: Date) -> ExportSnapshot.DeletionDTO {
+        ExportSnapshot.DeletionDTO(id: id, kind: .note, deletedAt: at)
+    }
+
+    /// 本地删了、远端还有 → 结果里没有。这是这套机制存在的全部理由。
+    func testTombstonedNoteDoesNotComeBackFromTheServer() {
+        let written = cal.day(2026, 12, 1)
+        let merged = MergeRules.mergeNotes(
+            local: [],
+            remote: [note("N1", updated: written)],
+            deletions: [tomb("N1", at: cal.day(2026, 12, 2))]
+        )
+        XCTAssertTrue(merged.isEmpty)
+    }
+
+    /// 删除不享受特权：另一端在删除之后又改过同一句，内容留下。
+    /// 这跟本文件其他地方的"后写入者胜"是同一条规则。
+    func testAnEditAfterTheDeleteWins() {
+        let merged = MergeRules.mergeNotes(
+            local: [],
+            remote: [note("N1", updated: cal.day(2026, 12, 5))],
+            deletions: [tomb("N1", at: cal.day(2026, 12, 2))]
+        )
+        XCTAssertEqual(merged.count, 1)
+    }
+
+    /// 同一天删的、同一天改的 → 删除生效（`deletedAt >= updatedAt`）。
+    /// 取等号是因为两边都按天对齐，不取等号时"当天删的"会被当天写的顶掉。
+    func testSameInstantCountsAsDeleted() {
+        let t = cal.day(2026, 12, 2)
+        let merged = MergeRules.mergeNotes(local: [note("N1", updated: t)], remote: [],
+                                           deletions: [tomb("N1", at: t)])
+        XCTAssertTrue(merged.isEmpty)
+    }
+
+    /// 墓碑没点名的记录一个都不能少。
+    func testOtherNotesAreUntouched() {
+        let merged = MergeRules.mergeNotes(
+            local: [note("N1", updated: cal.day(2026, 12, 1))],
+            remote: [note("N2", updated: cal.day(2026, 12, 1))],
+            deletions: [tomb("N1", at: cal.day(2026, 12, 3))]
+        )
+        XCTAssertEqual(merged.map(\.id), ["N2"])
+    }
+
+    /// 墓碑本身取并集，且**不会因为记录复活而消失** ——
+    /// 丢掉它，第三台设备就会重新把这条记录带回来。
+    func testTombstonesSurviveTheMergeEvenWhenTheRecordDid() {
+        let local = ExportSnapshot(exportedAt: cal.day(2026, 12, 9), exams: [], checkIns: [],
+                                   notes: [], letters: [],
+                                   deletions: [tomb("N1", at: cal.day(2026, 12, 2))])
+        let remote = ExportSnapshot(exportedAt: cal.day(2026, 12, 9), exams: [], checkIns: [],
+                                    notes: [note("N1", updated: cal.day(2026, 12, 5))],
+                                    letters: [], deletions: [])
+        let merged = MergeRules.merge(local: local, remote: remote, now: cal.day(2026, 12, 9))
+        XCTAssertEqual(merged.notes.count, 1)          // 改在删之后，内容留下
+        XCTAssertEqual(merged.deletions.count, 1)      // 墓碑照样带走
+    }
+
+    /// 同一条被两端各删一次 → 只留一条，取更晚的那次。
+    func testDeletionsDedupeToTheLatest() {
+        let merged = MergeRules.mergeDeletions(
+            local: [tomb("N1", at: cal.day(2026, 12, 2))],
+            remote: [tomb("N1", at: cal.day(2026, 12, 4))]
+        )
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].deletedAt, cal.day(2026, 12, 4))
+    }
+
+    /// 这个字段是后加的。**旧导出文件必须还能读** ——
+    /// "导出文件要跨版本读"正是这份格式存在的理由，加一个字段就废掉所有存档是不可接受的。
+    func testOldExportsWithoutTheDeletionsKeyStillDecode() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "exportedAt": "2026-12-01T00:00:00Z",
+          "exams": [], "checkIns": [], "notes": [], "letters": []
+        }
+        """
+        let snapshot = try ExportSnapshot.jsonDecoder()
+            .decode(ExportSnapshot.self, from: Data(json.utf8))
+        XCTAssertTrue(snapshot.deletions.isEmpty)
+    }
+}

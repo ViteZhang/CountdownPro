@@ -8,11 +8,18 @@ import DesignTokens
 /// # 为什么必须主动递
 /// **用户不会主动想到分享，必须由产品在情绪峰值主动递卡。**
 /// 但只递一次 —— 每个节点关闭后不再重复弹出，否则就从"递"变成"催"。
+///
+/// # 这里的按钮必须当场把事办了
+/// 原来的实现里，「保存图片」点下去是**再打开一个页面**，那个页面上还有一个
+/// 一模一样的「保存图片」。递卡的全部意义是趁情绪峰值一步完成，
+/// 中间插一屏，峰值就过去了 —— 而且用户会以为自己第一次没点中。
 struct MilestonePromptView: View {
 
     let content: ShareCardContent
     let palette: Palette
-    let onSave: () -> Void
+    let dateText: String
+    /// 只用于提示保存结果。关闭由 `onDecline` 负责。
+    let onToast: (String) -> Void
     let onDecline: () -> Void
 
     var body: some View {
@@ -22,38 +29,38 @@ struct MilestonePromptView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // 全屏展示**已经生成好的卡片**，用户看到的就是将要保存的那张。
+                // 全屏展示**已经生成好的卡片**，用户看到的就是将要保存/分享的那张。
                 ShareCardView(content: content, palette: palette)
                     .clipShape(RoundedRectangle(cornerRadius: DSRadius.card - 1))
 
-                HStack(spacing: DSSpacing.cardGapWide) {
+                ShareCardActions(
+                    content: content,
+                    palette: palette,
+                    dateText: dateText,
                     // 「不了」在前 —— 拒绝不该藏起来。
-                    Button(action: onDecline) {
-                        Text(Strings.ShareCard.decline)
-                            .dsFont(DSFont.body(13.5))
-                            .foregroundStyle(palette.textSecondary.color)
-                            .padding(.horizontal, DSSpacing.lg + 4)
-                            .padding(.vertical, DSSpacing.md - 2)
-                            .background { Capsule().dsHairline(palette.line) }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: onSave) {
-                        Text(Strings.ShareCard.saveImage)
-                            .dsFont(DSFont.body(13.5))
-                            .foregroundStyle(palette.background.color)
-                            .padding(.horizontal, DSSpacing.lg + 4)
-                            .padding(.vertical, DSSpacing.md - 2)
-                            .background(palette.textPrimary.color, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
+                    leading: AnyView(declineButton),
+                    onToast: onToast,
+                    // 存完就走：这一屏已经没有别的事可做了。
+                    onSaved: onDecline
+                )
                 .padding(.top, DSSpacing.xl + 10)
 
                 Spacer()
             }
             .padding(.horizontal, DSSpacing.pageHorizontalWide)
         }
+    }
+
+    private var declineButton: some View {
+        Button(action: onDecline) {
+            Text(Strings.ShareCard.decline)
+                .dsFont(DSFont.body(DSType.body))
+                .foregroundStyle(palette.textSecondary.color)
+                .padding(.horizontal, DSSpacing.md + 2)
+                .padding(.vertical, DSSpacing.md - 1)
+                .background { Capsule().dsHairline(palette.line) }
+        }
+        .buttonStyle(.plain)
     }
 }
 

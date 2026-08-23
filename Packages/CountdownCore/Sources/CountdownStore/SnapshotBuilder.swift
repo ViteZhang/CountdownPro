@@ -29,7 +29,8 @@ public struct SnapshotBuilder {
             exams: exams(),
             checkIns: checkIns(),
             notes: notes(),
-            letters: letters()
+            letters: letters(),
+            deletions: deletions()
         )
     }
 
@@ -108,6 +109,20 @@ public struct SnapshotBuilder {
                 content: letter.isOpened ? letter.revealedContent : nil,
                 sealedContentBase64: letter.sealedContent.base64EncodedString()
             )
+        }
+    }
+
+    /// 墓碑。同步要靠它才能把删除也传出去（见 `MergeRules.mergeNotes`）。
+    ///
+    /// 导出文件里同样带着 —— 导出和同步共用这一个构造器，
+    /// 一份"记录已经删了、导出文件里却还在"的存档，会在导入时把它们全带回来。
+    private func deletions() -> [ExportSnapshot.DeletionDTO] {
+        let items = (try? context.fetch(
+            FetchDescriptor<Deletion>(sortBy: [SortDescriptor(\.deletedAt)])
+        )) ?? []
+        return items.compactMap { item in
+            guard let kind = item.kind else { return nil }
+            return ExportSnapshot.DeletionDTO(id: item.recordID, kind: kind, deletedAt: item.deletedAt)
         }
     }
 }

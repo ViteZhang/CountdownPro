@@ -15,6 +15,13 @@ public enum Strings {
     /// 资料未提供的文案占位符。**禁止用真实文案填充这个函数的返回值。**
     public static func missing(_ key: String) -> String { "⟪待补文案：\(key)⟫" }
 
+    /// 产品名。**全 App 唯一的真相源。**
+    ///
+    /// 它会出现在四个地方：分享卡水印、关于页应用名、App 的 `CFBundleDisplayName`、
+    /// 小组件的 `CFBundleDisplayName`。后两处在 `project.yml` 里，跟这里对不上时
+    /// 用户会在桌面和分享图上看见两个名字 —— 改名时四处都要动，别只改 Swift 这一边。
+    public static let productName = "备考倒计时"
+
     // MARK: - 通用
 
     public enum Common {
@@ -22,6 +29,8 @@ public enum Strings {
         public static let skip = "跳过"
         public static let save = "保存"
         public static let close = "关闭"
+        public static let cancel = "取消"
+        public static let delete = "删除"
         /// auth 原型明确：用「以后再说」，不用「跳过」——后者暗示这是流程的一步。
         public static let later = "以后再说"
     }
@@ -182,10 +191,43 @@ public enum Strings {
         }
         public static let makeCard = "做成卡片"
 
+        /// 时间线的操作藏在长按里（5.8.1 要求"记录页长按"出卡）。
+        /// 长按没有任何视觉提示，不说一句就等于没做，所以这行脚注是必需的。
+        public static let noteActionHint = "长按一句话，可以做成卡片，或者删掉。"
+
+        // MARK: 补签（以下为草拟文案，待确认）
+        //
+        // 资料未给这几句。之所以不能留占位符：补签是日历上点一下就发生的事，
+        // 提示语是用户唯一能确认"点中了哪一天"的地方。
+        //
+        // 语气基准：D-04 规定补签**不限次数、不需要道具**，所以确认语里要主动说清这件事 ——
+        // 大多数同类产品的"补签卡"机制会让人默认这一下是要付出代价的。
+
+        /// 「补记 11 月 18 日」
+        public static func backfillConfirmTitle(_ date: String) -> String { "补记\(date)" }
+        public static let backfillConfirmBody = "这一天会计入累计天数。补记不限次数，也不消耗任何东西。"
+        public static let backfillConfirmAction = "记上"
+
+        /// 「11 月 18 日记上了」
+        public static func backfillDone(_ date: String) -> String { "\(date)记上了" }
+
+        /// 超窗。**不能只说"不行"** —— 一个断更了三周的人看到这句时，
+        /// 最需要知道的是"我之前攒的还在不在"。
+        public static let backfillOutOfWindow = "补记只能回到 14 天以内。更早的日子记不上了，但累计天数不会因此减少。"
+
+        // MARK: 删除心里话（草拟文案，待确认）
+        //
+        // 沿用删除考试那一组已给定的措辞（「删掉…？」/「删掉」/「留着」），
+        // 不另造一套 —— 同一个动作在两处用不同的词，用户要重新判断一次严重程度。
+
+        public static let deleteNoteTitle = "删掉这句心里话？"
+        /// 必须点明打卡记录不受影响：这两件事在用户心里是绑在一起的，
+        /// 不说清楚，怕丢累计天数的人就不敢删。
+        public static let deleteNoteBody = "删掉之后找不回来了。那天的打卡记录会留着。"
+        public static let deleteNoteConfirm = "删掉"
+        public static let deleteNoteCancel = "留着"
+
         // 资料未提供：
-        public static let backfillConfirm = missing("补签确认文案")
-        public static let backfillDone = missing("补签成功提示")
-        public static let backfillOutOfWindow = missing("超出14天补签窗口的提示")
         public static let editNote = missing("心里话编辑入口文案")
     }
 
@@ -339,13 +381,29 @@ public enum Strings {
 
         public static let saveImage = "保存图片"
         public static let savedToAlbum = "已保存到相册"
+
+        // MARK: 分享与失败态（草拟文案，待确认）
+        //
+        // 「保存图片」是资料给的，但只有保存这一条路意味着用户要
+        // 保存 → 切到微信 → 从相册里翻出来，三步。分享面板是一步。
+        public static let share = "分享"
+
+        /// 出现在系统分享面板的预览标题上。
+        public static let sharePreviewTitle = productName
+        /// 导出文件名。带日期，避免相册/文件里堆出一串同名文件。
+        public static func fileName(_ date: String) -> String { "\(productName) \(date).png" }
+
+        // 失败态三句。规范：说清发生了什么 + 怎么办，不道歉、不甩锅给系统。
+        public static let saveDenied = "没有相册权限，图片没能保存。到「设置 → \(productName) → 照片」里选「仅添加照片」就可以了。"
+        public static let saveFailed = "图片没能保存。可以再试一次，或者用「分享」直接发出去。"
+        public static let renderFailed = "卡片没能生成。退出这个页面重新进来试试。"
         public static let noQRCodeHint = "没有二维码，只有一行淡水印"
         /// 节点全屏卡的次要按钮（5.8.2）
         public static let decline = "不了"
 
-        /// 设计决策 D-11：不放二维码。水印仅一行淡色产品名。
-        /// 产品名待拍板（需求文档待决事项 1），原型占位为「倒计时」。
-        public static let watermark = missing("产品名（分享卡水印 / App 展示名）")
+        /// 设计决策 D-11：不放二维码。水印仅一行淡色产品名，别的什么都没有 ——
+        /// 不加 Logo、不加下载引导、不加"扫码打开"。
+        public static let watermark = productName
 
         public static func distanceTo(_ examTitle: String) -> String { "距离\(examTitle)" }
         /// 设计决策 D-11：「已走过」进度条 + 这行字必须出现在**每一张**卡上，
@@ -644,11 +702,17 @@ public enum Strings {
         public static let thirdPartySharing = "第三方信息共享清单"
         public static let feedback = "给我们提意见"
 
-        /// 正文必须由律师或合规顾问出具。**不许 AI 生成后直接上线。**
-        public static let termsBody = missing("用户协议正文（须律师/合规出具，不可自拟）")
-        public static let privacyBody = missing("隐私政策正文（须律师/合规出具，不可自拟）")
-        public static let personalInfoBody = missing("个人信息收集清单正文")
-        public static let thirdPartyBody = missing("第三方信息共享清单正文")
+        /// 四份正文是**开发方草拟的底稿**，见 `LegalText`。
+        ///
+        /// 每一份的第一行都顶着「草案…不得作为正式版本发布」，
+        /// 文中所有主体信息、联系方式、备案号仍是 `⟪待补文案：…⟫`。
+        /// 上线前必须由律师或合规顾问审核并替换 —— 一份读起来很像的文本直接上线，
+        /// 是这个页面上唯一真正危险的做法：它会让所有人（包括我们自己）
+        /// 以为这件事已经做完了。
+        public static var termsBody: String { LegalText.termsOfService }
+        public static var privacyBody: String { LegalText.privacyPolicy }
+        public static var personalInfoBody: String { LegalText.personalInfoCollected }
+        public static var thirdPartyBody: String { LegalText.thirdPartySharing }
         public static let feedbackContact = missing("意见反馈联系方式")
         /// App 内需可查见，通常放在关于页底部，可跳工信部查询。
         public static let icpNumber = missing("ICP 备案号")

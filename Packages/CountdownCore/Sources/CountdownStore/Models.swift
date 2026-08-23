@@ -230,9 +230,38 @@ public final class AppFlag {
     }
 }
 
+/// 墓碑：本地删掉过什么。
+///
+/// # 为什么删除要留一行
+/// 同步的合并规则只会让数据变多（心里话按 id 取较新，打卡取并集）。
+/// 不留墓碑的话，在手机上删掉的一句心里话，会在下一次同步时从服务端原样长回来 ——
+/// 而用户已经以为它没了。**一个会自己撤销的删除比没有删除更糟。**
+///
+/// 只记 id、类型和时间，**不记内容**：它是"这条没了"的证据，不是被删内容的副本。
+/// 尤其不能因为想做"回收站"就把正文抄一份进来 —— 那等于删除是假的。
+@Model
+public final class Deletion {
+    @Attribute(.unique) public var key: String
+    public var recordID: String
+    public var kindRaw: String
+    public var deletedAt: Date
+
+    public var kind: ExportSnapshot.DeletionDTO.Kind? {
+        ExportSnapshot.DeletionDTO.Kind(rawValue: kindRaw)
+    }
+
+    public init(recordID: String, kind: ExportSnapshot.DeletionDTO.Kind, deletedAt: Date = .now) {
+        self.key = "\(kind.rawValue):\(recordID)"
+        self.recordID = recordID
+        self.kindRaw = kind.rawValue
+        self.deletedAt = deletedAt
+    }
+}
+
 public enum ModelSchema {
     public static let all: [any PersistentModel.Type] = [
         Exam.self, CheckIn.self, Note.self, Letter.self, Account.self, AppFlag.self,
+        Deletion.self,
     ]
 }
 #endif

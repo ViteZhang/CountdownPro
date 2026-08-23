@@ -2,10 +2,12 @@
 #
 #   brew install xcodegen && xcodegen generate
 #
-# 产品名尚未拍板（需求文档待决事项 1），下列标识符按仓库名取，定名后需同步修改：
-#   - PRODUCT_BUNDLE_IDENTIFIER（两个 target）
-#   - App Groups（两个 .entitlements 与 StoreConfiguration.shared）
-#   - INFOPLIST_KEY_CFBundleDisplayName
+# 产品名已定为「备考倒计时」，展示名两处都已填上。
+#
+# Bundle ID 与 App Group 仍然是 com.countdownpro.* —— **刻意不跟着改**：
+# 它们不面向用户，而 App Group 一改，已装用户的小组件就读不到旧容器里的数据
+# （表现为一夜之间全变回占位态）。要改只能在首个版本发布之前改，且三处一起改：
+# 两个 .entitlements 与 StoreConfiguration.shared。
 
 name: CountdownPro
 options:
@@ -64,13 +66,15 @@ targets:
         # 缺了它，Xcode 既找不到现成的 Info.plist、也不会自动生成，
         # 签名阶段直接失败（报 "target does not have an Info.plist file"）。
         GENERATE_INFOPLIST_FILE: YES
-        # 产品名尚未拍板（需求文档待决事项 1），先占位。
-        # 与小组件的 CFBundleDisplayName 一样，不自拟名字填进去。
-        INFOPLIST_KEY_CFBundleDisplayName: "⟪待补文案：产品名⟫"
+        # 与 Strings.productName 必须一致。
+        INFOPLIST_KEY_CFBundleDisplayName: "备考倒计时"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         # 需求文档 6：不申请通讯录 / 位置 / 相册读取权限。
         # 仅需相册**写入**用于保存分享卡，且只在用户点「保存图片」时才请求。
-        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "⟪待补文案：相册写入权限说明⟫"
+        # 草拟文案，待确认（见 DOCS/待补文案清单.md）。这一句会**原样**出现在系统弹窗上，
+        # 留占位符等于让用户和审核员都看见 ⟪待补文案⟫，所以不能空着。
+        # 措辞要对得上 .addOnly：只说写入，并明说不读取。
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "保存分享卡到你的相册。只写入这一张图片，不读取相册里的任何内容。"
         # 深浅色两套都必须支持，跟随系统。
         INFOPLIST_KEY_UIUserInterfaceStyle: Automatic
 
@@ -97,6 +101,7 @@ targets:
     info:
       path: CountdownWidgets/Info.plist
       properties:
-        CFBundleDisplayName: "⟪待补文案：小组件 Bundle 显示名⟫"
+        # 小组件在"添加小组件"画廊里按这个名字归组，与 App 同名才找得到。
+        CFBundleDisplayName: "备考倒计时"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

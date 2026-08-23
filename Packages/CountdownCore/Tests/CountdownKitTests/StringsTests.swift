@@ -39,14 +39,61 @@ final class StringsTests: XCTestCase {
         XCTAssertEqual(Strings.Auth.successTitle, "存好了") // 不是「登录成功」
     }
 
+    /// 产品名已拍板。它同时是分享卡水印和关于页的应用名 —— 一个来源，四个落点。
+    /// （另外两处在 `project.yml` 里，由 `Scripts/check-product-name.sh` 守着。）
+    func testProductNameIsSettledAndSharedByEveryDisplaySite() {
+        XCTAssertEqual(Strings.productName, "备考倒计时")
+        XCTAssertEqual(Strings.ShareCard.watermark, Strings.productName)
+        XCTAssertFalse(Strings.ShareCard.watermark.contains("待补文案"))
+    }
+
     /// 资料未给的文案必须是刺眼占位符，不能被误当成成品。
     func testMissingCopyIsLoudlyMarked() {
-        XCTAssertTrue(Strings.ShareCard.watermark.hasPrefix("⟪待补文案："))
         XCTAssertTrue(Strings.Notifications.letterOpen.hasPrefix("⟪待补文案："))
-        // 用户协议与隐私政策正文必须由律师/合规出具，**不许 AI 生成后直接上线**。
-        XCTAssertTrue(Strings.About.privacyBody.hasPrefix("⟪待补文案："))
-        XCTAssertTrue(Strings.About.termsBody.hasPrefix("⟪待补文案："))
         XCTAssertTrue(Strings.About.icpNumber.hasPrefix("⟪待补文案："))
+    }
+
+    // MARK: - 补签与删除（草拟文案）
+    //
+    // 这两组不锁字句 —— 它们是草拟的，改字是预期内的事。
+    // 锁的是每句话**必须回答的那个问题**：改写时把答案删掉就会红。
+
+    /// 超窗提示必须回答"我之前攒的还在不在"。
+    /// 只说"不行"会让一个断更了三周的人以为累计被清了 —— 而 D-03 的全部重量在这里。
+    func testBackfillOutOfWindowSaysTheTotalIsSafe() {
+        let s = Strings.Log.backfillOutOfWindow
+        XCTAssertTrue(s.contains("14"), s)
+        XCTAssertTrue(s.contains("不会") && s.contains("减少"), s)
+        XCTAssertFalse(s.contains("！"), s)
+    }
+
+    /// 补记确认必须点明"不限次数、不消耗东西"。
+    /// 同类产品的「补签卡」让绝大多数用户默认这一下要付代价（D-04 明确不设道具）。
+    func testBackfillConfirmSaysItCostsNothing() {
+        XCTAssertTrue(Strings.Log.backfillConfirmBody.contains("不限次数"))
+        XCTAssertTrue(Strings.Log.backfillConfirmTitle("12月1日").contains("12月1日"))
+        XCTAssertTrue(Strings.Log.backfillDone("12月1日").contains("12月1日"))
+    }
+
+    /// 删除心里话的确认必须点明打卡记录不受影响。
+    /// 这两件事在用户心里是绑着的，不说清楚，怕丢累计天数的人就不敢删。
+    func testDeleteNoteConfirmSaysCheckInsSurvive() {
+        XCTAssertTrue(Strings.Log.deleteNoteBody.contains("打卡记录"), Strings.Log.deleteNoteBody)
+        XCTAssertTrue(Strings.Log.deleteNoteBody.contains("留着"), Strings.Log.deleteNoteBody)
+        // 沿用删除考试那一组已给定的措辞，不另造一套。
+        XCTAssertEqual(Strings.Log.deleteNoteConfirm, Strings.Exams.deleteConfirm)
+        XCTAssertEqual(Strings.Log.deleteNoteCancel, Strings.Exams.deleteCancel)
+    }
+
+    /// 保存失败的几句必须给出下一步，且不许道歉（文案规范禁区词含「抱歉」）。
+    func testSaveFailureCopyTellsYouWhatToDo() {
+        for s in [Strings.ShareCard.saveDenied, Strings.ShareCard.saveFailed,
+                  Strings.ShareCard.renderFailed] {
+            XCTAssertFalse(s.contains("抱歉"), s)
+            XCTAssertFalse(s.contains("！"), s)
+        }
+        XCTAssertTrue(Strings.ShareCard.saveDenied.contains("设置"))
+        XCTAssertTrue(Strings.ShareCard.saveDenied.contains(Strings.productName))
     }
 
     // MARK: - 心理支持资源

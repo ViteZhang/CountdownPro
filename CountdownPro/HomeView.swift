@@ -156,6 +156,7 @@ struct HomeView: View {
                         .foregroundStyle(palette.textSecondary.color)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Strings.ShareCard.share)
 
                 Button {
                     showingSettings = true
@@ -411,12 +412,17 @@ struct HomeView: View {
     @ViewBuilder
     private var toastView: some View {
         if let toast {
+            // 胶囊改成圆角卡：保存失败那几句要说清"怎么办"，一行放不下，
+            // 胶囊里换行会挤成一坨。
             Text(toast)
                 .dsFont(DSFont.caption(12.5))
                 .foregroundStyle(palette.textPrimary.color)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, DSSpacing.lg - 4)
                 .padding(.vertical, DSSpacing.sm + 2)
-                .background(palette.surfaceRaised.color, in: Capsule())
+                .background(palette.surfaceRaised.color,
+                            in: RoundedRectangle(cornerRadius: DSRadius.card - 1))
+                .padding(.horizontal, DSSpacing.pageHorizontalWide)
                 .padding(.top, DSSpacing.xl)
                 .transition(.opacity)
                 .task {
@@ -499,13 +505,14 @@ struct HomeView: View {
 
         case .milestoneCard(let daysRemaining):
             let content = cardBuilder.milestone(examTitle: exam.title, countdown: summary.countdown)
-            MilestonePromptView(content: content, palette: palette) {
-                markMilestoneShown(daysRemaining)
-                self.prompt = nil
-                shareInitialKind = .milestone
-                shareCards = [.milestone: content]
-            } onDecline: {
+            MilestonePromptView(
+                content: content,
+                palette: palette,
+                dateText: display.dotted(.now),
+                onToast: { toast = $0 }
+            ) {
                 // 每个节点只触发一次，用户关闭后不再重复弹出。
+                // 保存成功后也走这里 —— 这一屏已经没有别的事可做了。
                 markMilestoneShown(daysRemaining)
                 self.prompt = nil
             }

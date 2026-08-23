@@ -12,10 +12,14 @@ import DesignTokens
 ///    **每接入一个新 SDK 就要更新这份清单。**
 /// 3. **ICP 备案号** —— App 内需可查见，通常在关于页底部，可跳工信部查询。
 ///
-/// # 正文为什么全是占位符
-/// 用户协议与隐私政策的正文必须由律师或合规顾问出具。
-/// AI 生成一份读起来很像的直接上线，是这个页面上唯一真正危险的做法 ——
-/// 它会让所有人（包括我们自己）以为这件事已经做完了。
+/// # 四份正文是草案
+/// 见 `LegalText`：开发方按 App 的实际行为写了一份底稿，每一份都顶着
+/// 「草案…不得作为正式版本发布」，主体信息、联系方式、备案号仍是占位符。
+///
+/// 底稿必须由律师或合规顾问审核后才能上线。一份读起来很像的文本直接上线，
+/// 是这个页面上唯一真正危险的做法 —— 它会让所有人（包括我们自己）
+/// 以为这件事已经做完了。所以草案横幅写在**正文里**，不是写在注释里：
+/// 删掉它是一个显眼的、需要解释的动作。
 struct AboutView: View {
 
     @Environment(\.theme) private var theme
@@ -30,10 +34,11 @@ struct AboutView: View {
 
     var body: some View {
         SettingsPage(title: Strings.About.title, palette: palette) {
-            // 应用名。**产品名尚未拍板**，所以这里显示的是占位符而不是一个临时名字 ——
-            // 临时名字会一路流进隐私政策、分享卡水印和应用商店，再也拿不出来。
+            // 应用名。取 `Strings.productName` 而不是读 Info.plist ——
+            // 桌面图标下面那个名字由 Xcode 配置决定，这里显示的必须和它是同一个来源，
+            // 否则改名时只会有一边跟着变。
             VStack(alignment: .leading, spacing: DSSpacing.xs) {
-                Text(Strings.ShareCard.watermark)
+                Text(Strings.productName)
                     .dsFont(DSFont.title(DSType.screenTitle))
                     .foregroundStyle(palette.textPrimary.color)
                 Text(versionText)
@@ -68,10 +73,15 @@ struct AboutView: View {
     private func link(_ title: String, body: String) -> some View {
         NavigationLink {
             SettingsPage(title: title, palette: palette) {
+                // 法务文本是几千字的长文，行距不给够就没人读得下去 ——
+                // 而"没人读得下去"正是这类文本被写成天书的原因，不该由我们再添一笔。
                 Text(body)
                     .dsFont(DSFont.body(DSType.body))
                     .foregroundStyle(palette.textSecondary.color)
+                    .lineSpacing(6)
+                    .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         } label: {
             SettingsRow(title: title, palette: palette)

@@ -93,5 +93,25 @@ public struct CheckInService {
     public func totalNotes() -> Int {
         (try? context.fetchCount(FetchDescriptor<Note>())) ?? 0
     }
+
+    /// 删除一句心里话。
+    ///
+    /// # 为什么删除只到心里话为止
+    /// 这一句是用户自己写的，写的时候可能正难受 —— 事后想把它拿掉是很正常的诉求，
+    /// 不该只能靠删掉整场考试来实现。
+    ///
+    /// 但**那天的打卡记录不动**：打卡记的是"这一天你在"，心里话记的是"你说了什么"，
+    /// 是两件事。顺手把打卡一起删掉，会让累计天数在用户没预期的时候往回走，
+    /// 而 D-03 的整个前提就是累计只增不减。
+    ///
+    /// 删除是真删，不做软删除 —— 一份"看起来删掉了但还在库里"的记录，
+    /// 会在导出文件和同步里冒出来，那时用户已经以为它不存在了。
+    public func deleteNote(_ note: Note, at now: Date = .now) {
+        // 先立墓碑再删：同步的合并规则只会让数据变多，没有这一行，
+        // 下一次同步服务端那份就原样长回来了（见 MergeRules.mergeNotes）。
+        context.insert(Deletion(recordID: note.id, kind: .note, deletedAt: now))
+        context.delete(note)
+        try? context.save()
+    }
 }
 #endif
