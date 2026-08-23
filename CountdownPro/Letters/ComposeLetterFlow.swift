@@ -171,14 +171,14 @@ struct ComposeLetterFlow: View {
     }
 
     private func saveDraftAndClose() {
-        try? makeService().saveDraft(trimmed, existing: draft)
+        try? makeService().saveDraft(trimmed, existing: draft, examID: exam.id)
         dismiss()
     }
 
     private func seal(trigger: LetterTrigger, openAt: Date) {
         let service = makeService()
-        guard let letter = try? service.saveDraft(trimmed, existing: draft,
-                                                  openAt: openAt, trigger: trigger) else { return }
+        guard let letter = try? service.saveDraft(trimmed, existing: draft, openAt: openAt,
+                                                  trigger: trigger, examID: exam.id) else { return }
         service.seal(letter, openAt: openAt, trigger: trigger)
         stage = .done(days: max(cal.days(from: .now, to: openAt), 0))
     }

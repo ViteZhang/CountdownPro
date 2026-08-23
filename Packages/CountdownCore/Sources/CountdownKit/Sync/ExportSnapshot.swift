@@ -69,12 +69,15 @@ public struct ExportSnapshot: Codable, Equatable, Sendable {
     public struct NoteDTO: Codable, Equatable, Sendable, Identifiable {
         public var id: String
         public var date: Date
+        /// 归属考试。`nil` = 归属未知（多考试之前的记录）。
+        public var examID: String?
         public var content: String
         public var createdAt: Date
         public var updatedAt: Date
 
-        public init(id: String, date: Date, content: String, createdAt: Date, updatedAt: Date) {
-            self.id = id; self.date = date; self.content = content
+        public init(id: String, date: Date, examID: String? = nil, content: String,
+                    createdAt: Date, updatedAt: Date) {
+            self.id = id; self.date = date; self.examID = examID; self.content = content
             self.createdAt = createdAt; self.updatedAt = updatedAt
         }
     }
@@ -90,6 +93,8 @@ public struct ExportSnapshot: Codable, Equatable, Sendable {
         /// 草稿。草稿参与同步合并；已封存的信 append-only。
         public var isDraft: Bool
         public var updatedAt: Date
+        /// 归属考试。`nil` = 归属未知。
+        public var examID: String?
         /// 仅当 `isOpened == true` 时有值。
         public var content: String?
         /// 未开启时的密文。草稿同样以密文导出。
@@ -97,10 +102,11 @@ public struct ExportSnapshot: Codable, Equatable, Sendable {
 
         public init(id: String, writtenAt: Date, openAt: Date, openTrigger: LetterTrigger,
                     isOpened: Bool, openedAt: Date?, isDraft: Bool = false, updatedAt: Date,
+                    examID: String? = nil,
                     content: String?, sealedContentBase64: String?) {
             self.id = id; self.writtenAt = writtenAt; self.openAt = openAt
             self.openTrigger = openTrigger; self.isOpened = isOpened; self.openedAt = openedAt
-            self.isDraft = isDraft; self.updatedAt = updatedAt
+            self.isDraft = isDraft; self.updatedAt = updatedAt; self.examID = examID
             self.content = content; self.sealedContentBase64 = sealedContentBase64
         }
     }

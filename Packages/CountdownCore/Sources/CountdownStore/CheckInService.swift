@@ -74,10 +74,17 @@ public struct CheckInService {
     /// 心里话完全选填，上限 200 字。
     /// 已打卡后按钮不可重复点击，但**心里话可继续追加/编辑当天内容**（5.3）。
     @discardableResult
-    public func addNote(_ content: String, on date: Date = .now) -> Note? {
+    /// - Parameter examID: 归属考试。删除考试时要靠它把心里话一并带走 ——
+    ///   也要靠它保证**不带走**别的考试的记录。
+    public func addNote(
+        _ content: String,
+        examID: String? = nil,
+        on date: Date = .now
+    ) -> Note? {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let note = Note(date: cal.startOfDay(date), content: trimmed, createdAt: date)
+        let note = Note(date: cal.startOfDay(date), examID: examID,
+                        content: trimmed, createdAt: date)
         context.insert(note)
         try? context.save()
         return note

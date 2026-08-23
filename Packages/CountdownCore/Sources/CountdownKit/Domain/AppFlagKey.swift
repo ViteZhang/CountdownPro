@@ -21,6 +21,20 @@ public enum AppFlagKey {
     /// 用户主动导出过数据。登录价值时刻 `.export` 的触发依据。
     public static let didRequestExport = "did_request_export"
 
+    /// 两个提醒开关（提醒二级页）。**只有这两个，没有每日提醒。**
+    /// 这个人群手机常被收走，每日提醒既是骚扰又无效（与 D-03 同源）。
+    public static let notifyMilestones = "notify_milestones"
+    public static let notifyLetters = "notify_letters"
+
+    /// 当前皮肤。存 `Skin.rawValue`。
+    public static let selectedSkin = "selected_skin"
+
+    /// 深浅色偏好。存 `AppearancePreference.rawValue`。
+    ///
+    /// 存的是**偏好**，不是当前生效的模式 —— 后者是偏好和系统状态一起算出来的，
+    /// 属于可推导值，存下来就会和真相分叉（用户在系统里切了深色，App 里还记着浅色）。
+    public static let appearancePreference = "appearance_preference"
+
     /// 登录价值时刻触发点。**每个触发点一生只弹一次**，关闭后不再重复。
     public enum AuthPrompt: String, CaseIterable, Sendable {
         /// 写完第一封未来信件后 —— **最高优先级**。

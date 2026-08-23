@@ -14,9 +14,33 @@ import DesignTokens
 /// 这里的分支结构就是那道物理隔离：`OnboardingView` 这一支下面挂不到任何 Auth 视图。
 struct RootView: View {
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var context
+    @Environment(\.colorScheme) private var systemColorScheme
     @Query(filter: #Predicate<Exam> { $0.isPrimary }, sort: \Exam.createdAt)
     private var primaryExams: [Exam]
+    /// 皮肤与深浅色偏好都存在 `AppFlag` 里。查出来而不是用 `@AppStorage`：
+    /// 一处存储、一处同步、一处导出，不再多开一个会和主库分叉的地方。
+    @Query private var appFlags: [AppFlag]
+
+    private let cal = DayCalendar.current
+
+    private var skin: Skin {
+        Skin(rawValue: value(of: AppFlagKey.selectedSkin)) ?? .default
+    }
+
+    /// 深浅色偏好。存的是**偏好**，实际生效的模式由它和系统状态一起算 ——
+    /// 后者是可推导值，存下来就会和真相分叉。
+    private var preference: AppearancePreference {
+        AppearancePreference(rawValue: value(of: AppFlagKey.appearancePreference)) ?? .followSystem
+    }
+
+    private var effectiveColorScheme: ColorScheme {
+        preference.resolvedIsDark(systemIsDark: systemColorScheme == .dark) ? .dark : .light
+    }
+
+    private func value(of key: String) -> Int {
+        appFlags.first { $0.key == key }?.intValue ?? 0
+    }
 
     var body: some View {
         Group {
@@ -27,7 +51,10 @@ struct RootView: View {
                 OnboardingView { _ in }
             }
         }
-        .dsTheme(skin: .default, colorScheme: colorScheme)
+        .dsTheme(skin: skin, colorScheme: effectiveColorScheme)
+        // 「始终用深色 / 始终用浅色」必须同时作用到系统控件上（DatePicker、Toggle、
+        // 键盘），否则整页是深色、弹出的选择器是浅色。
+        .preferredColorScheme(preference.followsSystem ? nil : effectiveColorScheme)
     }
 }
 
@@ -37,7 +64,7 @@ struct MainTabView: View {
     let exam: Exam
 
     @Environment(\.modelContext) private var context
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
 
     @Query private var checkIns: [CheckIn]
     @Query private var notes: [Note]
@@ -52,9 +79,7 @@ struct MainTabView: View {
 
     private let cal = DayCalendar.current
     private var flags: FlagStore { FlagStore(context: context, cal: cal) }
-    private var palette: Palette {
-        Theme(skin: .default, scheme: colorScheme == .dark ? .dark : .light).palette
-    }
+    private var palette: Palette { theme.palette }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -115,7 +140,11 @@ struct MainTabView: View {
             sealedLetterCount: sealedLetterCount,
             totalCheckIns: checkIns.count,
             didRequestExport: flags.isSet(AppFlagKey.didRequestExport),
-            isAfterExam: false
+            // 考后接力开启时是第四个价值时刻。写死 false 会让它永远不触发 ——
+            // 那种漏法不会报错，只会安静地少掉一个入口。
+            isAfterExam: CountdownEngine(cal: cal)
+                .countdown(startDate: exam.startDate, targetDate: exam.targetDate, today: .now)
+                .isAfterExam
         )
         let shown = Set(AuthPromptTrigger.allCases.filter { flags.isSet($0.flagKey) })
         authPrompt = AuthPromptResolver.resolve(

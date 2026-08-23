@@ -78,7 +78,7 @@ public struct SnapshotBuilder {
         )) ?? []
         return items.map {
             ExportSnapshot.NoteDTO(
-                id: $0.id, date: $0.date, content: $0.content,
+                id: $0.id, date: $0.date, examID: $0.examID, content: $0.content,
                 createdAt: $0.createdAt, updatedAt: $0.updatedAt
             )
         }
@@ -103,6 +103,7 @@ public struct SnapshotBuilder {
                 openedAt: letter.openedAt,
                 isDraft: letter.isDraft,
                 updatedAt: letter.updatedAt,
+                examID: letter.examID,
                 // 只有已开启的信才带明文 —— 草稿也不带。
                 content: letter.isOpened ? letter.revealedContent : nil,
                 sealedContentBase64: letter.sealedContent.base64EncodedString()

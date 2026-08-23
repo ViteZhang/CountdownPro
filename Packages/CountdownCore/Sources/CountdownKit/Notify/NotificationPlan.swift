@@ -48,7 +48,10 @@ public struct ScheduledNotification: Equatable, Sendable, Identifiable {
     public var title: String {
         switch kind {
         case .milestone, .examDayMorning:
-            return Strings.Notifications.title
+            // `pushTitle`，不是 `Strings.Notifications.title` —— 后者是设置里
+            // 那一页的标题（「提醒」）。锁屏上弹一条标题写着「提醒」的通知，
+            // 等于什么都没说，而这是全 App 唯一绕开所有界面直达用户的展示面。
+            return Strings.Notifications.pushTitle
         case .letterDue, .letterNightBefore:
             return Strings.Letters.notificationTitle
         }
@@ -106,26 +109,35 @@ public enum NotificationPlanner {
     ///
     /// 只返回**将来**的通知：已经过去的时刻交给系统只会被立刻丢弃，
     /// 还会白白占掉 64 条额度里的名额。
+    /// - Parameters:
+    ///   - milestonesEnabled: 提醒页的「重要的日子」开关。
+    ///   - lettersEnabled: 提醒页的「信件到期」开关。
+    ///
+    /// 两个开关是**分别**关掉的，不是一个总开关下的装饰。
+    /// 有人只想要信件提醒而不想被节点打扰，这是完全合理的需求，
+    /// 而合成一个开关就永远满足不了它。
     public static func plan(
         targetDate: Date,
         letters: [LetterNotificationInput],
         now: Date,
+        milestonesEnabled: Bool = true,
+        lettersEnabled: Bool = true,
         cal: DayCalendar = .current
     ) -> [ScheduledNotification] {
 
         var result: [ScheduledNotification] = []
 
-        for days in Milestone.notificationTriggers {
+        for days in Milestone.notificationTriggers where milestonesEnabled {
             let day = cal.adding(days: -days, to: targetDate)
             guard let fire = cal.time(hour: milestoneHour, on: day) else { continue }
             result.append(ScheduledNotification(kind: .milestone(daysRemaining: days), fireDate: fire))
         }
 
-        if let fire = cal.time(hour: examMorningHour, on: targetDate) {
+        if milestonesEnabled, let fire = cal.time(hour: examMorningHour, on: targetDate) {
             result.append(ScheduledNotification(kind: .examDayMorning, fireDate: fire))
         }
 
-        for letter in letters {
+        for letter in letters where lettersEnabled {
             // 草稿没有托付出去，已开启的不必再提醒。
             guard !letter.isDraft, !letter.isOpened else { continue }
             guard let fire = cal.time(hour: letterHour, on: letter.openAt) else { continue }

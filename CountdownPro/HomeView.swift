@@ -22,7 +22,7 @@ struct HomeView: View {
     var onOpenLetters: () -> Void = {}
 
     @Environment(\.modelContext) private var context
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @Query private var checkIns: [CheckIn]
@@ -38,9 +38,7 @@ struct HomeView: View {
     @State private var resolvedPrompt = false
     @State private var showingSettings = false
 
-    private var palette: Palette {
-        Theme(skin: .default, scheme: colorScheme == .dark ? .dark : .light).palette
-    }
+    private var palette: Palette { theme.palette }
 
     private let cal = DayCalendar.current
     private var display: DateDisplay { DateDisplay(cal: cal) }
@@ -67,6 +65,28 @@ struct HomeView: View {
         )
     }
 
+    // MARK: - 考后接力（5.12）
+
+    /// 考后日程。按省份内置，未填省份时走全国通用近似值。
+    /// 拿不到的项**整段跳过**，不编日期 —— 见 `PostExamScheduleTable`。
+    private var schedule: PostExamSchedule {
+        PostExamScheduleTable.schedule(examType: exam.type, province: exam.province,
+                                       targetDate: exam.targetDate, cal: cal)
+    }
+
+    /// 考后状态。`nil` = 还没考 / 或考后日程已全部走完。
+    private var postExam: PostExamState? {
+        PostExamEngine(cal: cal).state(targetDate: exam.targetDate,
+                                       schedule: schedule, today: .now)
+    }
+
+    /// 打卡是否已冻结。
+    ///
+    /// **考试当天仍然可以打卡** —— 那一天正是最该说一句「今天也在」的日子。
+    /// 冻结从考试次日开始：路走完了，这个动作就该停，
+    /// 继续打卡会让它失去含义（6.4）。
+    private var checkInFrozen: Bool { summary.countdown.isAfterExam }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -74,7 +94,11 @@ struct HomeView: View {
                 ring.padding(.top, DSSpacing.xs)
                 treeCard.padding(.top, DSSpacing.sm - 2)
                 statCards.padding(.top, DSSpacing.cardGap)
-                checkInButton.padding(.top, DSSpacing.md + 2)
+                if checkInFrozen {
+                    frozenTotal.padding(.top, DSSpacing.md + 2)
+                } else {
+                    checkInButton.padding(.top, DSSpacing.md + 2)
+                }
                 letterHint
                 census
             }
@@ -84,7 +108,8 @@ struct HomeView: View {
         .background(palette.background.color.ignoresSafeArea())
         .sheet(isPresented: $showingNoteSheet) {
             NoteSheetView(palette: palette) { text in
-                guard let note = CheckInService(context: context, cal: cal).addNote(text) else { return }
+                guard let note = CheckInService(context: context, cal: cal)
+                    .addNote(text, examID: exam.id) else { return }
                 // 5.3 第 5 步：写完保存 → 触发心里话分享卡入口（**不强制**）。
                 openShareSheet(.note, note: note)
             }
@@ -99,7 +124,10 @@ struct HomeView: View {
         .fullScreenCover(item: $readingLetter) { letter in
             LetterReadView(letter: letter, palette: palette)
         }
-        .task { resolvePrompt() }
+        .task {
+            resolvePrompt()
+            showPostExamNoticeIfDue()
+        }
         .overlay(alignment: .top) { toastView }
         .sheet(isPresented: $showingSettings) {
             NavigationStack { SettingsView() }
@@ -147,7 +175,13 @@ struct HomeView: View {
 
     private var ring: some View {
         let c = summary.countdown
-        return DSRingView(progress: c.progress, palette: palette) {
+        // 考后每切换一个阶段，环**重新从 0 填充**（6.1）：
+        // 这是新的一段路，不是旧进度的延续。
+        // 铺成"从考试日到开学日的总进度"会让等出分那两周的环几乎不动，
+        // 而那恰好是最需要看见"在走"的两周。
+        let state = postExam
+        let progress = state.map { $0.phase == .examDay ? 1 : $0.progress } ?? c.progress
+        return DSRingView(progress: progress, palette: palette) {
             VStack(spacing: 0) {
                 Text(centerNumber(c))
                     .dsFont(DSFont.display(DSType.ringNumber))
@@ -155,7 +189,7 @@ struct HomeView: View {
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
 
-                Text(Strings.Home.ringSubtitle)
+                Text(ringSubtitle)
                     .dsFont(DSFont.caption(DSType.ringCaption))
                     .foregroundStyle(palette.textSecondary.color)
                     .padding(.top, 2)
@@ -174,9 +208,26 @@ struct HomeView: View {
         }
         .frame(width: 252, height: 252)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "\(Strings.Home.passed(c.daysPassed))，\(Strings.Onboarding.resultRemaining(c.daysRemaining))"
-        )
+        .accessibilityLabel(ringAccessibilityLabel)
+    }
+
+    /// 环内副文案。考前是「天后见分晓」，考后按阶段换成「天后出分」等。
+    private var ringSubtitle: String {
+        guard let state = postExam else { return Strings.Home.ringSubtitle }
+        switch state.phase {
+        case .examDay:
+            return Strings.PostExam.examDayCaption(totalDays: summary.countdown.daysPassed)
+        default:
+            return state.caption ?? Strings.Home.ringSubtitle
+        }
+    }
+
+    private var ringAccessibilityLabel: String {
+        let c = summary.countdown
+        guard let state = postExam, state.phase != .examDay else {
+            return "\(Strings.Home.passed(c.daysPassed))，\(ringSubtitle)"
+        }
+        return "\(state.daysRemaining)\(Strings.Common.day)\(ringSubtitle)"
     }
 
     /// 提示条三选一，优先级：今天到期 > 草稿未完成 > 即将开启（信件文案表第 8 节）。
@@ -191,9 +242,35 @@ struct HomeView: View {
         }
     }
 
-    /// 考试当天中心显示「今天」（5.2 边界情况），不显示 0。
+    /// 中心大数字。
+    ///
+    /// 考试当天显示「今天」（5.2 边界情况 / 6.1），**不显示 0** ——
+    /// 0 会被读成"结束了"，而那一天恰恰什么都还没开始。
+    /// 考后各阶段显示的是**本阶段**剩余天数，不是考试日的负数。
     private func centerNumber(_ c: Countdown) -> String {
-        c.isExamDay ? Strings.Home.today : "\(abs(c.daysRemaining))"
+        if c.isExamDay { return Strings.PostExam.examDayBigWord }
+        if let state = postExam { return "\(state.daysRemaining)" }
+        return "\(abs(c.daysRemaining))"
+    }
+
+    /// 考后取代打卡按钮的那一块。
+    ///
+    /// **累计数字冻结并永久保留。** 打卡的意义是"陪你走完这段路"，
+    /// 路走完了就该停 —— 继续打卡会让这个动作失去含义（6.4）。
+    ///
+    /// 注意这里是一段陈述，不是一个禁用掉的按钮：
+    /// 灰掉的按钮会让人一直想去点它，然后每点一次都被拒绝一次。
+    private var frozenTotal: some View {
+        VStack(spacing: DSSpacing.xs) {
+            Text(Strings.PostExam.frozenTotal(summary.totalCheckIns))
+                .dsFont(DSFont.body(DSType.bodyLarge))
+                .foregroundStyle(palette.textPrimary.color)
+            Text(Strings.PostExam.frozenCaption)
+                .dsFont(DSFont.caption(DSType.caption))
+                .foregroundStyle(palette.textSecondary.color)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DSSpacing.md)
     }
 
     // MARK: - 成长物
@@ -437,5 +514,18 @@ struct HomeView: View {
 
     private func markMilestoneShown(_ daysRemaining: Int) {
         flags.set(Milestone(daysRemaining: daysRemaining).flagKey)
+    }
+
+    /// 阶段切换提示（6.2）。每条一生只出现一次，且只用 Toast ——
+    /// **不做全屏**。开屏最多弹一个全屏提示，那一个已经被信件和节点卡占着了，
+    /// 再加一个，用户会在同一天连吃两个全屏。
+    private func showPostExamNoticeIfDue() {
+        guard let state = postExam,
+              let notice = state.notice,
+              let key = state.noticeFlagKey,
+              !flags.isSet(key)
+        else { return }
+        flags.set(key)
+        toast = notice.text
     }
 }

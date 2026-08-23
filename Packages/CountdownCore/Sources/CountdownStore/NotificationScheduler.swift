@@ -41,6 +41,8 @@ public struct NotificationScheduler: Sendable {
         targetDate: Date,
         letters: [LetterNotificationInput],
         now: Date = .now,
+        milestonesEnabled: Bool = true,
+        lettersEnabled: Bool = true,
         cal: DayCalendar = .current
     ) async {
         center.removeAllPendingNotificationRequests()
@@ -48,7 +50,8 @@ public struct NotificationScheduler: Sendable {
         guard await authorizationStatus() == .authorized else { return }
 
         let plan = NotificationPlanner.plan(
-            targetDate: targetDate, letters: letters, now: now, cal: cal
+            targetDate: targetDate, letters: letters, now: now,
+            milestonesEnabled: milestonesEnabled, lettersEnabled: lettersEnabled, cal: cal
         )
 
         for item in plan {

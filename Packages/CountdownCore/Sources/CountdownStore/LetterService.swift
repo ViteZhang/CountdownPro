@@ -35,6 +35,7 @@ public struct LetterService {
         existing: Letter? = nil,
         openAt: Date? = nil,
         trigger: LetterTrigger = .custom,
+        examID: String? = nil,
         now: Date = .now
     ) throws -> Letter {
         let sealed = try vault.seal(content)
@@ -51,7 +52,8 @@ public struct LetterService {
             writtenAt: now,
             openAt: openAt ?? cal.adding(days: 1, to: now),
             openTrigger: trigger,
-            isDraft: true
+            isDraft: true,
+            examID: examID
         )
         context.insert(letter)
         try? context.save()
@@ -103,11 +105,24 @@ public struct LetterService {
 
     /// 用户改了考试日期 → 预设节点信件的开启日跟着重算，自定义日期的信不动。
     ///
-    /// - Returns: 实际调整了几封，供 Toast 使用。
+    /// 预设节点是"相对考试日的某一天"，考试日变了它当然要跟着变；
+    /// 自定义日期是用户亲手指定的一个绝对日子（生日、纪念日），
+    /// 我们没有任何理由去动它 —— 那是替用户改他自己的决定。
+    ///
+    /// 已开启的信也不动：它已经被读过了，改开启日只会让历史变得不可信。
+    ///
+    /// - Parameter examID: 限定在这一场考试的信。`nil` = 不限定（单考试时代的调用方）。
+    ///   归属为 `nil` 的信**不参与** —— 不知道它属于哪场考试，就不该因为某场考试改期而动它。
+    /// - Returns: 实际调整了几封，供提示文案使用。
     @discardableResult
-    public func recalculateTriggers(newTargetDate: Date, resultDay: Date? = nil) -> Int {
+    public func recalculateTriggers(
+        newTargetDate: Date,
+        resultDay: Date? = nil,
+        examID: String? = nil
+    ) -> Int {
         let descriptor = FetchDescriptor<Letter>(predicate: #Predicate { !$0.isOpened })
-        guard let letters = try? context.fetch(descriptor) else { return 0 }
+        guard var letters = try? context.fetch(descriptor) else { return 0 }
+        if let examID { letters = letters.filter { $0.examID == examID } }
 
         let items = letters.map {
             LetterListItem(id: $0.id,

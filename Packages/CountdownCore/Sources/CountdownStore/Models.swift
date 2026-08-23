@@ -77,6 +77,12 @@ public final class Note {
     @Attribute(.unique) public var id: String
     /// 归属日期
     public var date: Date
+    /// 归属考试。
+    ///
+    /// `nil` = 归属未知（多考试之前写下的记录）。
+    /// 删除考试时**不删归属未知的记录** —— 宁可留下一条孤儿，
+    /// 也不能误删用户写下的东西。删错的代价是不可逆的，留错只是数据库里多一行。
+    public var examID: String?
     public var content: String
     public var createdAt: Date
     public var updatedAt: Date
@@ -84,11 +90,13 @@ public final class Note {
     public init(
         id: String = UUID().uuidString,
         date: Date,
+        examID: String? = nil,
         content: String,
         createdAt: Date = .now
     ) {
         self.id = id
         self.date = date
+        self.examID = examID
         self.content = String(content.prefix(Strings.NoteSheet.maxLength))
         self.createdAt = createdAt
         self.updatedAt = createdAt
@@ -125,6 +133,10 @@ public final class Letter {
     /// 草稿可修改，同步合并需要它。已封存的信不再变动。
     public var updatedAt: Date
 
+    /// 归属考试。`nil` = 归属未知。删除考试时不删归属未知的信 —— 见 `Note.examID`。
+    /// 对信件这条规则尤其硬：信是全 App 唯一不可重建的数据。
+    public var examID: String?
+
     public var openTrigger: LetterTrigger {
         get { LetterTrigger(rawValue: openTriggerRaw) ?? .custom }
         set { openTriggerRaw = newValue.rawValue }
@@ -136,10 +148,12 @@ public final class Letter {
         writtenAt: Date = .now,
         openAt: Date,
         openTrigger: LetterTrigger,
-        isDraft: Bool = false
+        isDraft: Bool = false,
+        examID: String? = nil
     ) {
         self.id = id
         self.sealedContent = sealedContent
+        self.examID = examID
         self.writtenAt = writtenAt
         self.openAt = openAt
         self.openTriggerRaw = openTrigger.rawValue
