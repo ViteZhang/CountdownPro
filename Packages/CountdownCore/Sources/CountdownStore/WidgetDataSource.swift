@@ -24,14 +24,12 @@ public struct WidgetDataSource: Sendable {
     /// 读取渲染所需的快照。返回 `nil` 表示用户还没走完引导（没有主考试），
     /// 此时小组件应显示占位态而不是 0 天。
     ///
-    /// # 为什么**不能**加 `@MainActor`
-    /// `TimelineProvider` 的三个方法都是 nonisolated 的。一旦这里要求主线程，
-    /// Provider 就必须跟着标 `@MainActor`，而那会让整个协议遵循「跨越 actor 边界」——
-    /// Swift 6 严格并发下这是编译错误，不是警告。
+    /// # 为什么不是 @MainActor
+    /// ModelContext 是函数内局部创建的（只读、用完即弃），不存在跨线程共享，
+    /// 不需要 MainActor。而调用方 `TimelineProvider` 的 witness 是非隔离的 ——
+    /// 这里标了 @MainActor 会把隔离冲突推给小组件那边（Swift 6 下无解）。
     ///
-    /// 而它本来也不需要主线程：`ModelContainer` / `ModelContext` 都在函数体内
-    /// 创建并用完即弃，`Exam` 从不逃逸出这个函数，跨出去的只有 `WidgetSnapshot`
-    /// 这个 `Sendable` 值类型。小组件是只读的，也不存在与主 App 争写同一个 store 的问题。
+    /// 跨出这个函数的只有 `WidgetSnapshot` 这个 `Sendable` 值类型，`Exam` 从不逃逸。
     public func snapshot() -> WidgetSnapshot? {
         guard let exam = primaryExam() else { return nil }
         return WidgetSnapshot(

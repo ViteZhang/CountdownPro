@@ -15,7 +15,12 @@ import UserNotifications
 /// # 不抛错
 /// 通知是锦上添花。权限被拒、系统队列满、排程失败，都不该让调用方有机会
 /// 把它变成一个 UI 上的错误态 —— 用户没有因此损失任何数据。
-public struct NotificationScheduler: Sendable {
+///
+/// # @unchecked Sendable
+/// `UNUserNotificationCenter` 是系统单例，其 API 全部线程安全（Apple 文档明确），
+/// 但 SDK 未给它标 Sendable，Swift 6 下只能由本类型承担这个断言。
+/// 只持有这一个不可变引用，没有别的可变状态，断言成立。
+public struct NotificationScheduler: @unchecked Sendable {
 
     private let center: UNUserNotificationCenter
 

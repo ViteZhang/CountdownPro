@@ -17,11 +17,12 @@ struct CountdownEntry: TimelineEntry {
     }
 }
 
-/// # 为什么这里一个 `@MainActor` 都没有
-/// `TimelineProvider` 的三个方法都是 nonisolated 的。给任意一个加上 `@MainActor`，
-/// Swift 6 严格并发就会判定「协议遵循跨越主 actor 边界」并报错。
-/// 小组件本来也不需要主线程：数据全部来自 App Group 内的只读 store，
-/// 读完立刻转成 `Sendable` 的值类型。
+/// # 隔离形态（Swift 6 + WidgetKit SDK 事实）
+/// 协议 `TimelineProvider` 整体是非隔离的（只有 completion 是 @Sendable），
+/// 全部依赖（WidgetDataSource / DayCalendar / WidgetEntryData）也都是 Sendable
+/// 值类型。因此 provider 保持 nonisolated 是既合法又零开销的形态 ——
+/// 曾尝试给类型或 witness 标 @MainActor，均触发 "crosses into main
+/// actor-isolated code" 硬错误，不要再走那条路。
 struct CountdownProvider: TimelineProvider {
 
     private let dataSource = WidgetDataSource(configuration: .shared)

@@ -3,7 +3,10 @@ import PackageDescription
 
 let package = Package(
     name: "CountdownCore",
-    platforms: [.iOS(.v17)],
+    // macOS 平台必须显式声明：否则 `swift test` 拿到 SPM 默认的老部署目标
+    // （macOS 10.13），Task / Date.now 等 API 全部不可用，测试编译失败。
+    // .v14（Sonoma）与 .iOS(.v17) 同代，API 可用面一致。
+    platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         // 纯 Foundation：领域模型、日期计算、文案。App 与 Widget 共用，可在任意平台跑测试。
         .library(name: "CountdownKit", targets: ["CountdownKit"]),

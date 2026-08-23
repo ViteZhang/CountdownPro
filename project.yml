@@ -49,12 +49,13 @@ targets:
     # 不写的话要靠 Xcode 打开工程时"自动创建 scheme"补上 ——
     # 于是命令行 xcodebuild 在没人开过 Xcode 的机器上会直接报 scheme not found，
     # CI 上尤其如此。
+    # 注意：testTargets 用的是 TestableTargetReference 语法，不是 dependencies 的
+    # package/product 双键写法。包内测试 target 必须写成 "包名/target名"（带斜杠）——
+    # 只写包名不带斜杠，xcodegen 2.46 会数组越界直接崩溃（trap）。
     scheme:
       testTargets:
-        - package: CountdownCore
-          product: CountdownKitTests
-        - package: CountdownCore
-          product: DesignTokensTests
+        - package: CountdownCore/CountdownKitTests
+        - package: CountdownCore/DesignTokensTests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.countdownpro.app
